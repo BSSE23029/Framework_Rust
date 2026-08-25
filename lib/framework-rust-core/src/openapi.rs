@@ -36,6 +36,9 @@ use crate::{
             AuthorizeParams, IntrospectRequest, TokenRequest, TokenResponse as OauthTokenResponse,
         },
         oauth_revoke::RevokeRequest,
+        passwordless::{
+            PasswordlessRequest, PasswordlessRequestResponse, PasswordlessVerifyRequest,
+        },
         refresh::RefreshRequest,
         register::{RegisterRequest, RegisterResponse},
         reset_password::ResetPasswordRequest,
@@ -91,6 +94,8 @@ impl Modify for SecurityAddon {
         crate::handlers::forgot_password::forgot_password,
         crate::handlers::reset_password::reset_password,
         crate::handlers::verify_email::verify_email,
+        crate::handlers::passwordless::request,
+        crate::handlers::passwordless::verify,
         // mfa
         crate::handlers::mfa::mfa_setup,
         crate::handlers::mfa::mfa_confirm,
@@ -239,6 +244,9 @@ impl Modify for SecurityAddon {
             OauthTokenResponse,
             IntrospectRequest,
             RevokeRequest,
+            PasswordlessRequest,
+            PasswordlessVerifyRequest,
+            PasswordlessRequestResponse,
             TrustDeviceRequest,
             TrustDeviceResponse,
             TrustedDeviceResponse,

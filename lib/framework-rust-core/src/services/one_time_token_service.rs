@@ -95,6 +95,7 @@ pub async fn store<C: ConnectionTrait>(
         token_type: Set(token_type.to_string()),
         expires_at: Set(expires_at),
         used_at: Set(None),
+        ..Default::default()
     }
     .insert(db)
     .await?;

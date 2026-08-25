@@ -14,6 +14,15 @@ pub struct Model {
     pub token_type: String,
     pub expires_at: DateTimeWithTimeZone,
     pub used_at: Option<DateTimeWithTimeZone>,
+    pub attempt_count: i32,
+    pub max_attempts: i32,
+    pub status: String,
+    pub created_at: DateTimeWithTimeZone,
+    pub created_by: Option<Uuid>,
+    pub updated_at: DateTimeWithTimeZone,
+    pub updated_by: Option<Uuid>,
+    pub deleted_at: Option<DateTimeWithTimeZone>,
+    pub deleted_by: Option<Uuid>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -23,3 +32,4 @@ impl ActiveModelBehavior for ActiveModel {}
 
 pub const TYPE_PASSWORD_RESET: &str = "password_reset";
 pub const TYPE_EMAIL_VERIFICATION: &str = "email_verification";
+pub const TYPE_PASSWORDLESS_LOGIN: &str = "passwordless_login";

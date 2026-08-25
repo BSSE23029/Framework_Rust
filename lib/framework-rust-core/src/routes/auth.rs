@@ -11,6 +11,7 @@ use crate::{
         logout::logout,
         mfa::{mfa_backup_codes_generate, mfa_challenge, mfa_confirm, mfa_disable, mfa_setup},
         oauth::{authorize, callback},
+        passwordless::{request as passwordless_request, verify as passwordless_verify},
         refresh::refresh,
         register::register,
         reset_password::reset_password,
@@ -30,6 +31,8 @@ pub fn public_router() -> Router<AppState> {
         .route("/auth/forgot-password", post(forgot_password))
         .route("/auth/reset-password", post(reset_password))
         .route("/auth/verify-otp", post(verify_email))
+        .route("/auth/passwordless/request", post(passwordless_request))
+        .route("/auth/passwordless/verify", post(passwordless_verify))
         .route("/auth/mfa/challenge", post(mfa_challenge))
         .route(
             "/auth/webauthn/authenticate/start",

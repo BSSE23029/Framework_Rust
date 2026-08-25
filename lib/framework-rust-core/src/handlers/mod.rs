@@ -19,6 +19,7 @@ pub mod mfa;
 pub mod oauth;
 pub mod oauth_as;
 pub mod oauth_revoke;
+pub mod passwordless;
 pub mod refresh;
 pub mod register;
 pub mod reset_password;
