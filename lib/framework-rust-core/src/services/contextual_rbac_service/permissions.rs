@@ -11,6 +11,7 @@ use crate::{
         user_role_designation_permissions,
     },
     error::AppError,
+    services::permission_scope_service,
 };
 
 use super::ensure_default_rdd;
@@ -33,6 +34,9 @@ pub(super) async fn ensure_urdp(
             active.deleted_by = Set(None);
             active.update(txn).await?;
         }
+        let scope =
+            permission_scope_service::ensure_tenant_scope(txn, tenant_id, permission_id).await?;
+        permission_scope_service::assign(txn, tenant_id, urdd_id, permission_id, scope.id).await?;
         return Ok(());
     }
 
@@ -45,6 +49,9 @@ pub(super) async fn ensure_urdp(
     }
     .insert(txn)
     .await?;
+    let scope =
+        permission_scope_service::ensure_tenant_scope(txn, tenant_id, permission_id).await?;
+    permission_scope_service::assign(txn, tenant_id, urdd_id, permission_id, scope.id).await?;
     Ok(())
 }
 

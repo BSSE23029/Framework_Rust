@@ -11,6 +11,7 @@ pub mod oauth_service;
 pub mod one_time_token_service;
 pub mod password_history_service;
 pub mod password_policy_service;
+pub mod permission_scope_service;
 pub mod permission_service;
 pub mod rate_limit_service;
 pub mod role_service;

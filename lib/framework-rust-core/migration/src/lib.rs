@@ -30,6 +30,7 @@ mod m20240101_000027_password_history;
 mod m20240101_000028_audit_and_contextual_rbac;
 mod m20240101_000029_audit_actor_context;
 mod m20240101_000030_tenant_hierarchy_domains;
+mod m20240101_000031_resource_permission_scopes;
 
 pub struct Migrator;
 
@@ -67,6 +68,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20240101_000028_audit_and_contextual_rbac::Migration),
             Box::new(m20240101_000029_audit_actor_context::Migration),
             Box::new(m20240101_000030_tenant_hierarchy_domains::Migration),
+            Box::new(m20240101_000031_resource_permission_scopes::Migration),
         ]
     }
 }
