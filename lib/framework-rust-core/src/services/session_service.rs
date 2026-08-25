@@ -1,6 +1,6 @@
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter,
+    sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
     Set,
 };
 use uuid::Uuid;
@@ -53,10 +53,14 @@ pub async fn find_valid(
 }
 
 pub async fn touch(db: &DatabaseConnection, id: &str) -> Result<(), AppError> {
-    db.execute_unprepared(&format!(
-        "UPDATE sessions SET last_seen_at = now() WHERE id = '{id}'"
-    ))
-    .await?;
+    sessions::Entity::update_many()
+        .col_expr(
+            sessions::Column::LastSeenAt,
+            Expr::value(Utc::now().fixed_offset()),
+        )
+        .filter(sessions::Column::Id.eq(id))
+        .exec(db)
+        .await?;
     Ok(())
 }
 
