@@ -1,0 +1,121 @@
+use axum::{
+    extract::{Path, State},
+    http::{HeaderMap, StatusCode},
+    response::IntoResponse,
+    Json,
+};
+use serde::Serialize;
+use uuid::Uuid;
+
+use crate::{
+    error::AppError,
+    handlers::admin_auth,
+    services::{audit_service, session_service},
+    state::AppState,
+};
+
+fn extract_tenant_id(headers: &HeaderMap) -> Result<Uuid, AppError> {
+    headers
+        .get("x-framework-rust-tenant-id")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| Uuid::parse_str(s).ok())
+        .ok_or_else(|| AppError::InvalidInput("x-framework-rust-tenant-id header required".into()))
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct SessionResponse {
+    pub id: String,
+    pub user_id: String,
+    pub email: String,
+    pub ip: Option<String>,
+    pub created_at: String,
+    pub last_seen_at: String,
+    pub expires_at: String,
+}
+
+#[utoipa::path(
+    get,
+    path = "/admin/sessions",
+    tag = "admin-sessions",
+    responses(
+        (status = 200, description = "List of active sessions", body = Vec<SessionResponse>),
+        (status = 401, description = "Unauthorized"),
+    ),
+    security(
+        ("admin_key" = [])
+    ),
+    params(
+        ("X-Framework-Rust-Tenant-Id" = String, Header, description = "Tenant UUID"),
+    )
+)]
+pub async fn list_sessions(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, AppError> {
+    admin_auth::require_admin(&headers, &state.config, state.master_tenant_id)?;
+    let tenant_id = extract_tenant_id(&headers)?;
+    let sessions = session_service::list_by_tenant(&state.db, tenant_id).await?;
+
+    let response: Vec<SessionResponse> = sessions
+        .into_iter()
+        .map(|s| {
+            let email = s.data["email"].as_str().unwrap_or("").to_string();
+            let ip = s.data["ip"].as_str().map(|s| s.to_string());
+            SessionResponse {
+                id: s.id,
+                user_id: s.user_id.to_string(),
+                email,
+                ip,
+                created_at: s.created_at.to_rfc3339(),
+                last_seen_at: s.last_seen_at.to_rfc3339(),
+                expires_at: s.expires_at.to_rfc3339(),
+            }
+        })
+        .collect();
+
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/admin/sessions/{id}",
+    tag = "admin-sessions",
+    responses(
+        (status = 204, description = "Session deleted"),
+        (status = 401, description = "Unauthorized"),
+    ),
+    security(
+        ("admin_key" = [])
+    ),
+    params(
+        ("id" = String, Path, description = "Session ID"),
+        ("X-Framework-Rust-Tenant-Id" = String, Header, description = "Tenant UUID"),
+    )
+)]
+pub async fn delete_session(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let actor = admin_auth::extract_actor(&headers, &state.config);
+    admin_auth::require_admin(&headers, &state.config, state.master_tenant_id)?;
+    let tenant_id = extract_tenant_id(&headers)?;
+
+    // Verify the session belongs to this tenant before deleting.
+    if let Some(session) = session_service::find_valid(&state.db, &id).await? {
+        if session.tenant_id == tenant_id {
+            session_service::delete(&state.db, &id).await?;
+            audit_service::record_best_effort(
+                state.db.clone(),
+                audit_service::AuditEvent::new(
+                    tenant_id,
+                    actor,
+                    "session.deleted",
+                    serde_json::json!({"session_id": id.as_str()}),
+                ),
+            );
+        }
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}

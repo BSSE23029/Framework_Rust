@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "framework-rust-core",
+    "framework-rust-core/migration",
+    "framework-rust-cli",
+]
+resolver = "2"

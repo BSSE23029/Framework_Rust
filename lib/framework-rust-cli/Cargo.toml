@@ -1,0 +1,33 @@
+[package]
+name    = "framework-rust-cli"
+version = "0.2.0"
+edition = "2021"
+license = "MIT"
+
+[[bin]]
+name = "framework-rust"
+path = "src/main.rs"
+
+[dependencies]
+# TUI
+ratatui   = "0.28"
+crossterm = "0.28"
+
+# HTTP
+reqwest   = { version = "0.12", default-features = false, features = ["json", "blocking", "rustls-tls"] }
+tokio     = { version = "1", features = ["full"] }
+
+# CLI flags
+clap      = { version = "4", features = ["derive", "env"] }
+
+# Config file
+serde       = { version = "1", features = ["derive"] }
+serde_json  = "1"
+toml        = "0.8"
+
+# Utils
+uuid        = { version = "1", features = ["v4"] }
+dirs        = "5"
+thiserror   = "1"
+arboard     = "3"
+csv         = "1"

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "FRAMEWORK RUST",
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "favicon": "/favicon.ico",
+  "colors": {
+    "primary": "#00d4ff",
+    "light": "#38e8ff",
+    "dark": "#00a8cc"
+  },
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/shrpp/framework-rust"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Get Started",
+    "url": "/getting-started"
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get Started",
+        "pages": [
+          "introduction",
+          "getting-started",
+          "configuration"
+        ]
+      },
+      {
+        "group": "Features",
+        "pages": [
+          "mfa",
+          "webauthn",
+          "smtp",
+          "social-login",
+          "m2m"
+        ]
+      },
+      {
+        "group": "Guides",
+        "pages": [
+          "architecture",
+          "security",
+          "admin-tui",
+          "database"
+        ]
+      },
+      {
+        "group": "API Reference",
+        "pages": [
+          "api-reference"
+        ]
+      }
+    ]
+  },
+  "footerSocials": {
+    "github": "https://github.com/shrpp/framework-rust"
+  }
+}
