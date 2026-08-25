@@ -40,6 +40,7 @@ use crate::{
         register::{RegisterRequest, RegisterResponse},
         reset_password::ResetPasswordRequest,
         tenants::{CreateTenantRequest, TenantResponse, TenantSlugEntry},
+        trusted_devices::{TrustDeviceRequest, TrustDeviceResponse, TrustedDeviceResponse},
         verify_email::VerifyOtpRequest,
         webauthn::{
             AuthFinishPayload, AuthStartPayload, RegisterFinishPayload,
@@ -103,6 +104,9 @@ impl Modify for SecurityAddon {
         crate::handlers::webauthn::authenticate_finish,
         // user
         crate::handlers::me::me,
+        crate::handlers::trusted_devices::trust_device,
+        crate::handlers::trusted_devices::list_devices,
+        crate::handlers::trusted_devices::revoke_device,
         // settings
         crate::handlers::admin_tenant_settings::get_policy,
         crate::handlers::admin_tenant_settings::put_policy,
@@ -235,6 +239,9 @@ impl Modify for SecurityAddon {
             OauthTokenResponse,
             IntrospectRequest,
             RevokeRequest,
+            TrustDeviceRequest,
+            TrustDeviceResponse,
+            TrustedDeviceResponse,
         )
     ),
     modifiers(&SecurityAddon),

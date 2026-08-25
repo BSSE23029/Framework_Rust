@@ -28,6 +28,7 @@ pub mod tenant_settings;
 pub mod tenant_smtp_config;
 pub mod tenants;
 pub mod totp_secrets;
+pub mod trusted_devices;
 pub mod user_role_designation_departments;
 pub mod user_role_designation_permission_scopes;
 pub mod user_role_designation_permissions;

@@ -24,6 +24,7 @@ pub mod register;
 pub mod reset_password;
 pub mod revoke;
 pub mod tenants;
+pub mod trusted_devices;
 pub mod verify_email;
 pub mod webauthn;
 pub mod well_known;
