@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    db, entity::tenant_domains, error::AppError, handlers::admin_auth,
+    entity::tenant_domains, error::AppError, handlers::admin_auth,
     services::tenant_hierarchy_service, state::AppState,
 };
 
@@ -63,10 +63,7 @@ async fn transaction(
     tenant_id: Uuid,
 ) -> Result<sea_orm::DatabaseTransaction, AppError> {
     authorize(headers, state, tenant_id)?;
-    let user_id = admin_auth::extract_actor(headers, &state.config);
-    Ok(db::begin_user_tenant_txn(&state.db, tenant_id, user_id)
-        .await?
-        .0)
+    admin_auth::begin_tenant_txn(state, headers, tenant_id).await
 }
 
 #[utoipa::path(

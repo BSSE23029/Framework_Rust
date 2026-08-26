@@ -24,6 +24,9 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                 Tab::Settings => "↑↓ Navigate  Enter Edit  c Context  r Refresh  Esc Back",
                 Tab::Sessions => "↑↓ Navigate  d Delete  c Context  r Refresh  Esc Back",
                 Tab::AuditLog => "↑↓ Navigate  c Context  r Refresh  Esc Back",
+                Tab::Domains => {
+                    "↑↓ Navigate  n New  v Verify  p Primary  d Deactivate  c Context  r Refresh"
+                }
                 Tab::Users => {
                     "↑↓ Navigate  n New  e Edit  d Deactivate  c Context  r Refresh  Esc Back"
                 }

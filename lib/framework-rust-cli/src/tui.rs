@@ -46,6 +46,7 @@ pub async fn run(mut app: App) -> io::Result<()> {
     let mut user_table = StatefulTable::new();
     let mut idp_table = StatefulTable::new();
     let mut audit_table = StatefulTable::new();
+    let mut domain_table = StatefulTable::new();
     let mut session_list_state = ratatui::widgets::ListState::default();
     let mut role_list_state = ratatui::widgets::ListState::default();
     let mut permission_list_state = ratatui::widgets::ListState::default();
@@ -81,6 +82,7 @@ pub async fn run(mut app: App) -> io::Result<()> {
                 Tab::IdentityProviders => {
                     ui::identity_providers::render(frame, &app, content_body, &mut idp_table)
                 }
+                Tab::Domains => ui::domains::render(frame, &app, content_body, &mut domain_table),
                 Tab::AuditLog => ui::audit_log::render(frame, &app, content_body, &mut audit_table),
             }
 
@@ -300,6 +302,24 @@ pub async fn run(mut app: App) -> io::Result<()> {
                         &[
                             ("Name", name, "e.g. documents:read"),
                             ("Description", description, "optional description"),
+                        ],
+                        *field,
+                    );
+                }
+                Modal::CreateDomain {
+                    domain_name,
+                    domain_type,
+                    is_primary,
+                    field,
+                } => {
+                    let primary = if *is_primary { "yes" } else { "no" };
+                    modal::render_form(
+                        frame,
+                        "New Tenant Domain",
+                        &[
+                            ("Domain", domain_name, "login.example.com"),
+                            ("Type", domain_type, "custom or platform"),
+                            ("Primary", primary, "Space toggles"),
                         ],
                         *field,
                     );
@@ -1630,6 +1650,66 @@ async fn handle_key(app: &mut App, code: KeyCode, _mods: KeyModifiers) {
             }
             return;
         }
+        Modal::CreateDomain {
+            mut domain_name,
+            mut domain_type,
+            mut is_primary,
+            mut field,
+        } => {
+            match code {
+                KeyCode::Esc => app.modal = Modal::None,
+                KeyCode::Tab => {
+                    field = (field + 1) % 3;
+                    app.modal = Modal::CreateDomain {
+                        domain_name,
+                        domain_type,
+                        is_primary,
+                        field,
+                    };
+                }
+                KeyCode::Enter if !domain_name.is_empty() && !domain_type.is_empty() => {
+                    app.modal = Modal::None;
+                    perform_create_domain(app, domain_name, domain_type, is_primary).await;
+                }
+                KeyCode::Char(' ') if field == 2 => {
+                    is_primary = !is_primary;
+                    app.modal = Modal::CreateDomain {
+                        domain_name,
+                        domain_type,
+                        is_primary,
+                        field,
+                    };
+                }
+                KeyCode::Backspace if field < 2 => {
+                    if field == 0 {
+                        domain_name.pop();
+                    } else {
+                        domain_type.pop();
+                    }
+                    app.modal = Modal::CreateDomain {
+                        domain_name,
+                        domain_type,
+                        is_primary,
+                        field,
+                    };
+                }
+                KeyCode::Char(c) if field < 2 => {
+                    if field == 0 {
+                        domain_name.push(c);
+                    } else {
+                        domain_type.push(c);
+                    }
+                    app.modal = Modal::CreateDomain {
+                        domain_name,
+                        domain_type,
+                        is_primary,
+                        field,
+                    };
+                }
+                _ => {}
+            }
+            return;
+        }
         Modal::EditPermission {
             id,
             mut name,
@@ -1820,7 +1900,8 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                 Tab::Sessions => Tab::Permissions,
                 Tab::Settings => Tab::Sessions,
                 Tab::IdentityProviders => Tab::Settings,
-                Tab::AuditLog => Tab::IdentityProviders,
+                Tab::Domains => Tab::IdentityProviders,
+                Tab::AuditLog => Tab::Domains,
             };
             load_current_tab(app).await;
         }
@@ -1832,7 +1913,8 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                 Tab::Permissions => Tab::Sessions,
                 Tab::Sessions => Tab::Settings,
                 Tab::Settings => Tab::IdentityProviders,
-                Tab::IdentityProviders => Tab::AuditLog,
+                Tab::IdentityProviders => Tab::Domains,
+                Tab::Domains => Tab::AuditLog,
                 Tab::AuditLog => Tab::Clients,
             };
             load_current_tab(app).await;
@@ -1880,6 +1962,11 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                     app.idp_selected -= 1;
                 }
             }
+            Tab::Domains => {
+                if app.domain_selected > 0 {
+                    app.domain_selected -= 1;
+                }
+            }
             Tab::AuditLog => {
                 if app.audit_log_selected > 0 {
                     app.audit_log_selected -= 1;
@@ -1916,6 +2003,11 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
             Tab::IdentityProviders => {
                 if app.idp_selected + 1 < app.identity_providers.len() {
                     app.idp_selected += 1;
+                }
+            }
+            Tab::Domains => {
+                if app.domain_selected + 1 < app.domains.len() {
+                    app.domain_selected += 1;
                 }
             }
             Tab::AuditLog => {
@@ -1966,6 +2058,16 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
             Tab::Sessions => {}
             Tab::Settings => {}
             Tab::AuditLog => {}
+            Tab::Domains => {
+                if app.active_tenant_id.is_some() {
+                    app.modal = Modal::CreateDomain {
+                        domain_name: String::new(),
+                        domain_type: String::from("custom"),
+                        is_primary: false,
+                        field: 0,
+                    };
+                }
+            }
             Tab::IdentityProviders => {
                 if app.active_tenant_id.is_some() {
                     app.modal = Modal::CreateIdp {
@@ -2034,6 +2136,7 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
             Tab::Sessions => {}
             Tab::Settings => {}
             Tab::AuditLog => {}
+            Tab::Domains => {}
             Tab::IdentityProviders => {
                 if let Some(idp) = app.selected_idp() {
                     app.modal = Modal::EditIdp {
@@ -2064,6 +2167,12 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
         }
         KeyCode::Char('r') => {
             load_current_tab(app).await;
+        }
+        KeyCode::Char('v') if app.tab == Tab::Domains => {
+            perform_domain_action(app, "verify").await;
+        }
+        KeyCode::Char('p') if app.tab == Tab::Domains => {
+            perform_domain_action(app, "primary").await;
         }
         KeyCode::Char('m') if app.tab == Tab::Users => {
             if let (Some(u), Some(tid)) =
@@ -2125,6 +2234,14 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
             }
             Tab::Settings => {}
             Tab::AuditLog => {}
+            Tab::Domains => {
+                if let Some(domain) = app.selected_domain() {
+                    app.modal = Modal::ConfirmDelete {
+                        id: domain.id.clone(),
+                        label: domain.domain_name.clone(),
+                    };
+                }
+            }
             Tab::IdentityProviders => {
                 if let Some(idp) = app.selected_idp() {
                     app.modal = Modal::ConfirmDelete {
@@ -2150,13 +2267,14 @@ async fn load_all(app: &mut App) {
     load_access_contexts(app, &tid).await;
     let client = app.client.clone();
 
-    let (clients_r, users_r, roles_r, perms_r, sessions_r, idps_r, audit_r) = tokio::join!(
+    let (clients_r, users_r, roles_r, perms_r, sessions_r, idps_r, domains_r, audit_r) = tokio::join!(
         client.list_clients(&tid),
         client.list_users(&tid),
         client.list_roles(&tid),
         client.list_permissions(&tid),
         client.list_sessions(&tid),
         client.list_identity_providers(&tid),
+        client.list_domains(&tid),
         client.list_audit_log(&tid),
     );
 
@@ -2224,6 +2342,13 @@ async fn load_all(app: &mut App) {
         }
         Err(e) => on_load_err(app, e, "AuditLog"),
     }
+    match domains_r {
+        Ok(list) => {
+            app.domain_selected = app.domain_selected.min(list.len().saturating_sub(1));
+            app.domains = list;
+        }
+        Err(e) => on_load_err(app, e, "Domains"),
+    }
 }
 
 async fn load_current_tab(app: &mut App) {
@@ -2238,6 +2363,7 @@ async fn load_current_tab(app: &mut App) {
         Tab::Sessions => load_sessions(app, tid).await,
         Tab::Settings => load_settings(app, tid).await,
         Tab::IdentityProviders => load_idps(app, tid).await,
+        Tab::Domains => load_domains(app, tid).await,
         Tab::AuditLog => load_audit_log(app, tid).await,
     }
 }
@@ -2817,6 +2943,20 @@ async fn load_idps(app: &mut App, tenant_id: String) {
     app.idps_loading = false;
 }
 
+async fn load_domains(app: &mut App, tenant_id: String) {
+    app.domains.clear();
+    app.domain_selected = 0;
+    app.domains_loading = true;
+    match app.client.list_domains(&tenant_id).await {
+        Ok(list) => {
+            app.domains = list;
+            app.clear_status();
+        }
+        Err(e) => on_load_err(app, e, "Domains"),
+    }
+    app.domains_loading = false;
+}
+
 async fn load_audit_log(app: &mut App, tenant_id: String) {
     app.audit_log = vec![];
     app.audit_log_selected = 0;
@@ -3183,6 +3323,48 @@ async fn perform_edit_permission(app: &mut App, id: String, name: String, descri
     }
 }
 
+async fn perform_create_domain(
+    app: &mut App,
+    domain_name: String,
+    domain_type: String,
+    is_primary: bool,
+) {
+    let Some(tenant_id) = app.active_tenant_id.clone() else {
+        return;
+    };
+    match app
+        .client
+        .create_domain(&tenant_id, &domain_name, &domain_type, is_primary)
+        .await
+    {
+        Ok(_) => {
+            app.set_status(format!("Domain '{domain_name}' created"));
+            load_domains(app, tenant_id).await;
+        }
+        Err(error) => app.modal = Modal::Error(error.to_string()),
+    }
+}
+
+async fn perform_domain_action(app: &mut App, action: &str) {
+    let Some(tenant_id) = app.active_tenant_id.clone() else {
+        return;
+    };
+    let Some(domain) = app.selected_domain().cloned() else {
+        return;
+    };
+    match app
+        .client
+        .domain_action(&tenant_id, &domain.id, action)
+        .await
+    {
+        Ok(()) => {
+            app.set_status(format!("Domain {}: {action}", domain.domain_name));
+            load_domains(app, tenant_id).await;
+        }
+        Err(error) => app.modal = Modal::Error(error.to_string()),
+    }
+}
+
 async fn perform_delete(app: &mut App, id: String) {
     app.modal = Modal::None;
     let Some(tid) = app.active_tenant_id.clone() else {
@@ -3216,6 +3398,11 @@ async fn perform_delete(app: &mut App, id: String) {
             .map(|_| "Session revoked"),
         Tab::Settings => return,
         Tab::AuditLog => return,
+        Tab::Domains => app
+            .client
+            .domain_action(&tid, &id, "deactivate")
+            .await
+            .map(|_| "Domain deactivated"),
         Tab::IdentityProviders => app
             .client
             .delete_identity_provider(&tid, &id)

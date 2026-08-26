@@ -262,6 +262,69 @@ impl Client {
         self.check(resp).await
     }
 
+    pub async fn list_domains(&self, tenant_id: &str) -> ApiResult<Vec<TenantDomain>> {
+        let resp = self
+            .inner
+            .get(format!(
+                "{}/admin/tenants/{tenant_id}/domains",
+                self.base_url
+            ))
+            .headers(self.tenant_headers(tenant_id))
+            .send()
+            .await?;
+        self.check(resp).await
+    }
+
+    pub async fn create_domain(
+        &self,
+        tenant_id: &str,
+        domain_name: &str,
+        domain_type: &str,
+        is_primary: bool,
+    ) -> ApiResult<TenantDomain> {
+        let resp = self
+            .inner
+            .post(format!(
+                "{}/admin/tenants/{tenant_id}/domains",
+                self.base_url
+            ))
+            .headers(self.tenant_headers(tenant_id))
+            .json(&serde_json::json!({
+                "domain_name": domain_name,
+                "domain_type": domain_type,
+                "is_primary": is_primary,
+            }))
+            .send()
+            .await?;
+        self.check(resp).await
+    }
+
+    pub async fn domain_action(
+        &self,
+        tenant_id: &str,
+        domain_id: &str,
+        action: &str,
+    ) -> ApiResult<()> {
+        let resp = self
+            .inner
+            .post(format!(
+                "{}/admin/tenants/{tenant_id}/domains/{domain_id}/{action}",
+                self.base_url
+            ))
+            .headers(self.tenant_headers(tenant_id))
+            .send()
+            .await?;
+        let status = resp.status();
+        if status.is_success() {
+            Ok(())
+        } else {
+            Err(ApiError::Api {
+                status: status.as_u16(),
+                message: format!("domain {action} failed"),
+            })
+        }
+    }
+
     pub async fn create_tenant(&self, name: &str, slug: &str) -> ApiResult<Tenant> {
         let resp = self
             .inner
@@ -1166,6 +1229,19 @@ pub struct AccessContext {
     pub designation_name: String,
     pub department_id: String,
     pub department_name: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TenantDomain {
+    pub id: String,
+    pub tenant_id: String,
+    pub domain_name: String,
+    pub domain_type: String,
+    pub is_primary: bool,
+    pub is_verified: bool,
+    pub verified_at: Option<String>,
+    pub ssl_enabled: bool,
+    pub status: String,
 }
 
 #[cfg(test)]

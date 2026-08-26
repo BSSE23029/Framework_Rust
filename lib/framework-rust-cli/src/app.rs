@@ -1,6 +1,6 @@
 use crate::api::{
     AccessContext, AuditLogEntry, Client, IdentityProvider, OAuthClient, PasskeyInfo, Permission,
-    Role, Session, Tenant, User,
+    Role, Session, Tenant, TenantDomain, User,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -33,6 +33,7 @@ pub enum Tab {
     Sessions,
     Settings,
     IdentityProviders,
+    Domains,
     AuditLog,
 }
 
@@ -241,6 +242,12 @@ pub enum Modal {
         description: String,
         field: usize,
     },
+    CreateDomain {
+        domain_name: String,
+        domain_type: String,
+        is_primary: bool,
+        field: usize,
+    },
     EditPermission {
         id: String,
         name: String,
@@ -299,6 +306,10 @@ pub struct App {
     pub audit_log: Vec<AuditLogEntry>,
     pub audit_log_selected: usize,
     pub audit_log_loading: bool,
+
+    pub domains: Vec<TenantDomain>,
+    pub domain_selected: usize,
+    pub domains_loading: bool,
 
     pub active_tenant_id: Option<String>,
     pub access_contexts: Vec<AccessContext>,
@@ -361,6 +372,10 @@ impl App {
             audit_log_selected: 0,
             audit_log_loading: false,
 
+            domains: vec![],
+            domain_selected: 0,
+            domains_loading: false,
+
             active_tenant_id: None,
             access_contexts: vec![],
             access_context_selected: 0,
@@ -401,6 +416,10 @@ impl App {
 
     pub fn selected_idp(&self) -> Option<&IdentityProvider> {
         self.identity_providers.get(self.idp_selected)
+    }
+
+    pub fn selected_domain(&self) -> Option<&TenantDomain> {
+        self.domains.get(self.domain_selected)
     }
 
     pub fn set_status(&mut self, msg: impl Into<String>) {
