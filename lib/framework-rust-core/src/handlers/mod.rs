@@ -23,6 +23,7 @@ pub mod oauth_revoke;
 pub mod passwordless;
 pub mod refresh;
 pub mod register;
+pub mod request_activity;
 pub mod reset_password;
 pub mod revoke;
 pub mod tenant_config;

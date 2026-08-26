@@ -17,6 +17,7 @@ pub mod permission_service;
 pub mod plan_service;
 pub mod quota_service;
 pub mod rate_limit_service;
+pub mod request_activity_service;
 pub mod role_service;
 pub mod seed_service;
 pub mod session_service;

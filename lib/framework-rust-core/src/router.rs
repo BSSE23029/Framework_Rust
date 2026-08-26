@@ -4,6 +4,7 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use crate::{
     handlers::well_known,
     middleware::{
+        activity::activity_middleware,
         auth::auth_middleware,
         security::{rate_limit_middleware, security_headers_middleware},
         tenant::tenant_middleware,
@@ -34,6 +35,10 @@ pub fn build_router(state: AppState) -> Router {
     let auth_protected = routes::auth::protected_router()
         .merge(routes::user::router())
         .merge(routes::settings::router())
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            activity_middleware,
+        ))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,

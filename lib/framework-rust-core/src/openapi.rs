@@ -42,6 +42,7 @@ use crate::handlers::{
     passwordless::{PasswordlessRequest, PasswordlessRequestResponse, PasswordlessVerifyRequest},
     refresh::RefreshRequest,
     register::{RegisterRequest, RegisterResponse},
+    request_activity::ActivityResponse,
     reset_password::ResetPasswordRequest,
     tenant_config::{
         ConfigDefinitionResponse, ConfigValueResponse, DefineConfigRequest, SetConfigValueRequest,
@@ -111,6 +112,7 @@ impl Modify for SecurityAddon {
         crate::handlers::webauthn::authenticate_finish,
         // user
         crate::handlers::me::me,
+        crate::handlers::request_activity::list,
         crate::handlers::trusted_devices::trust_device,
         crate::handlers::trusted_devices::list_devices,
         crate::handlers::trusted_devices::revoke_device,
@@ -262,6 +264,7 @@ impl Modify for SecurityAddon {
             TrustDeviceResponse,
             TrustedDeviceResponse,
             DefineConfigRequest, ConfigDefinitionResponse, SetConfigValueRequest, ConfigValueResponse,
+            ActivityResponse,
         )
     ),
     modifiers(&SecurityAddon),

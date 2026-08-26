@@ -21,6 +21,7 @@ pub mod plans;
 pub mod prelude;
 pub mod rdd_permission_groups;
 pub mod refresh_tokens;
+pub mod request_activity;
 pub mod revoked_jtis;
 pub mod role_designation_departments;
 pub mod role_permissions;

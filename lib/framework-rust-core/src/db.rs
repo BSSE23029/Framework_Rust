@@ -52,17 +52,32 @@ pub async fn begin_user_tenant_txn(
     tenant_id: Uuid,
     user_id: Option<Uuid>,
 ) -> Result<(DatabaseTransaction, Option<Uuid>), DbErr> {
+    begin_actor_tenant_txn(db, tenant_id, user_id, None).await
+}
+
+pub async fn begin_actor_tenant_txn(
+    db: &DatabaseConnection,
+    tenant_id: Uuid,
+    user_id: Option<Uuid>,
+    requested_urdd_id: Option<Uuid>,
+) -> Result<(DatabaseTransaction, Option<Uuid>), DbErr> {
     let txn = begin_tenant_txn(db, tenant_id).await?;
     let actor = match user_id {
-        Some(user_id) => user_role_designation_departments::Entity::find()
-            .filter(user_role_designation_departments::Column::TenantId.eq(tenant_id))
-            .filter(user_role_designation_departments::Column::UserId.eq(user_id))
-            .filter(user_role_designation_departments::Column::Status.eq("active"))
-            .filter(user_role_designation_departments::Column::DeletedAt.is_null())
-            .order_by_asc(user_role_designation_departments::Column::CreatedAt)
-            .one(&txn)
-            .await?
-            .map(|row| row.id),
+        Some(user_id) => {
+            let mut query = user_role_designation_departments::Entity::find()
+                .filter(user_role_designation_departments::Column::TenantId.eq(tenant_id))
+                .filter(user_role_designation_departments::Column::UserId.eq(user_id))
+                .filter(user_role_designation_departments::Column::Status.eq("active"))
+                .filter(user_role_designation_departments::Column::DeletedAt.is_null());
+            if let Some(requested) = requested_urdd_id {
+                query = query.filter(user_role_designation_departments::Column::Id.eq(requested));
+            }
+            query
+                .order_by_asc(user_role_designation_departments::Column::CreatedAt)
+                .one(&txn)
+                .await?
+                .map(|row| row.id)
+        }
         None => None,
     };
     if let Some(actor_id) = actor {

@@ -1,11 +1,10 @@
 use axum::extract::{FromRef, FromRequestParts};
 use axum::http::request::Parts;
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryOrder};
+use sea_orm::DatabaseTransaction;
 use uuid::Uuid;
 
 use crate::{
     db,
-    entity::user_role_designation_departments,
     error::AppError,
     middleware::{auth::AuthUser, tenant::TenantContext},
     state::AppState,
@@ -49,42 +48,21 @@ where
             .get::<TenantContext>()
             .cloned()
             .ok_or(AppError::Unauthorized)?;
-        let txn = db::begin_tenant_txn(&app_state.db, ctx.tenant_id).await?;
-        let actor_urdd_id = if let Some(auth) = parts.extensions.get::<AuthUser>() {
-            let requested = parts
+        let user_id = parts.extensions.get::<AuthUser>().map(|auth| auth.user_id);
+        let requested = if user_id.is_some() {
+            parts
                 .headers
                 .get("x-framework-rust-urdd-id")
                 .and_then(|value| value.to_str().ok())
-                .and_then(|value| Uuid::parse_str(value).ok());
-
-            let mut query = user_role_designation_departments::Entity::find()
-                .filter(user_role_designation_departments::Column::TenantId.eq(ctx.tenant_id))
-                .filter(user_role_designation_departments::Column::UserId.eq(auth.user_id))
-                .filter(user_role_designation_departments::Column::Status.eq("active"))
-                .filter(user_role_designation_departments::Column::DeletedAt.is_null());
-
-            if let Some(id) = requested {
-                query = query.filter(user_role_designation_departments::Column::Id.eq(id));
-            }
-
-            let actor = query
-                .order_by_asc(user_role_designation_departments::Column::CreatedAt)
-                .one(&txn)
-                .await?;
-
-            if requested.is_some() && actor.is_none() {
-                return Err(AppError::Unauthorized);
-            }
-
-            if let Some(actor) = actor {
-                db::set_actor_context(&txn, actor.id).await?;
-                Some(actor.id)
-            } else {
-                None
-            }
+                .and_then(|value| Uuid::parse_str(value).ok())
         } else {
             None
         };
+        let (txn, actor_urdd_id) =
+            db::begin_actor_tenant_txn(&app_state.db, ctx.tenant_id, user_id, requested).await?;
+        if requested.is_some() && actor_urdd_id.is_none() {
+            return Err(AppError::Unauthorized);
+        }
         Ok(Self {
             txn,
             tenant_id: ctx.tenant_id,
