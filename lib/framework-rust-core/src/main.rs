@@ -5,7 +5,7 @@ use framework_rust_core::{
     router::build_router,
     services::{
         bootstrap_service, jwk_service::JwkService, lockout_service, rate_limit_service,
-        session_service, token_service,
+        session_service, tenant_lifecycle_service, token_service,
     },
     state::AppState,
 };
@@ -95,6 +95,31 @@ async fn main() {
     );
 
     let state = AppState::new(db.clone(), config.clone(), jwk, master_tenant_id, webauthn);
+
+    let lifecycle_db = db.clone();
+    let lifecycle_master = master_tenant_id;
+    let lifecycle_interval = config.tenant_lifecycle_interval_seconds.max(60);
+    let trial_grace = config.trial_grace_days;
+    let subscription_grace = config.subscription_grace_days;
+    tokio::spawn(async move {
+        let mut interval =
+            tokio::time::interval(std::time::Duration::from_secs(lifecycle_interval));
+        loop {
+            interval.tick().await;
+            match tenant_lifecycle_service::reconcile(
+                &lifecycle_db,
+                tenant_lifecycle_service::now(),
+                lifecycle_master,
+                trial_grace,
+                subscription_grace,
+            )
+            .await
+            {
+                Ok(result) => tracing::info!(?result, "tenant lifecycle reconciled"),
+                Err(error) => tracing::error!(%error, "tenant lifecycle reconciliation failed"),
+            }
+        }
+    });
 
     // Background cleanup every 6 hours
     tokio::spawn(async move {

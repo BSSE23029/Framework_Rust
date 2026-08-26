@@ -42,6 +42,9 @@ pub struct Config {
     pub jwt_secret_previous: Option<String>,
     pub db_max_connections: u32,
     pub db_min_connections: u32,
+    pub tenant_lifecycle_interval_seconds: u64,
+    pub trial_grace_days: i64,
+    pub subscription_grace_days: i64,
 }
 
 #[derive(Clone, Debug)]
@@ -195,6 +198,12 @@ impl Config {
             jwt_secret_previous: env::var("JWT_SECRET_PREVIOUS").ok(),
             db_max_connections: parse_u32("DATABASE_MAX_CONNECTIONS", 20)?,
             db_min_connections: parse_u32("DATABASE_MIN_CONNECTIONS", 2)?,
+            tenant_lifecycle_interval_seconds: parse_u64(
+                "TENANT_LIFECYCLE_INTERVAL_SECONDS",
+                86_400,
+            )?,
+            trial_grace_days: parse_i64("TRIAL_GRACE_DAYS", 1)?.max(1),
+            subscription_grace_days: parse_i64("SUBSCRIPTION_GRACE_DAYS", 7)?.max(1),
         })
     }
 
@@ -236,6 +245,15 @@ fn parse_u32(key: &str, default: u32) -> Result<u32, String> {
     match env::var(key) {
         Ok(v) => v
             .parse::<u32>()
+            .map_err(|_| format!("{key} must be a positive integer")),
+        Err(_) => Ok(default),
+    }
+}
+
+fn parse_u64(key: &str, default: u64) -> Result<u64, String> {
+    match env::var(key) {
+        Ok(v) => v
+            .parse::<u64>()
             .map_err(|_| format!("{key} must be a positive integer")),
         Err(_) => Ok(default),
     }

@@ -14,6 +14,8 @@ pub enum AppError {
     Conflict,
     #[error("too many requests")]
     TooManyRequests,
+    #[error("quota exceeded for {resource}: limit {limit}")]
+    QuotaExceeded { resource: String, limit: i64 },
     #[error("invalid input: {0}")]
     InvalidInput(String),
     #[error("internal error")]
@@ -81,6 +83,16 @@ impl IntoResponse for AppError {
                 Json(json!({
                     "error": "too_many_requests",
                     "message": "Too many attempts. Please wait before trying again",
+                })),
+            )
+                .into_response(),
+            AppError::QuotaExceeded { resource, limit } => (
+                StatusCode::FORBIDDEN,
+                Json(json!({
+                    "error": "quota_exceeded",
+                    "message": format!("The {resource} quota of {limit} has been reached"),
+                    "resource": resource,
+                    "limit": limit,
                 })),
             )
                 .into_response(),

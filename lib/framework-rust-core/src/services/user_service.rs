@@ -1,7 +1,7 @@
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, Set};
 use uuid::Uuid;
 
-use crate::{entity::users, error::AppError};
+use crate::{entity::users, error::AppError, services::quota_service};
 
 pub struct CreateUserInput {
     pub tenant_id: Uuid,
@@ -14,6 +14,7 @@ pub async fn create(
     txn: &DatabaseTransaction,
     input: CreateUserInput,
 ) -> Result<users::Model, AppError> {
+    quota_service::ensure_user_capacity(txn, input.tenant_id).await?;
     let model = users::ActiveModel {
         tenant_id: Set(input.tenant_id),
         email: Set(input.email_encrypted),

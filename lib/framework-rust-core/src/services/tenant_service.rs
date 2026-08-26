@@ -18,7 +18,7 @@ pub async fn find_active(
         .await?
         .ok_or(AppError::NotFound)?;
 
-    if !tenant.is_active {
+    if !tenant.is_active || tenant.status != "active" || tenant.deleted_at.is_some() {
         return Err(AppError::Unauthorized);
     }
 
@@ -31,6 +31,8 @@ pub async fn find_active(
 pub async fn list_all_active(db: &DatabaseConnection) -> Result<Vec<TenantRecord>, AppError> {
     let tenants = tenants::Entity::find()
         .filter(tenants::Column::IsActive.eq(true))
+        .filter(tenants::Column::Status.eq("active"))
+        .filter(tenants::Column::DeletedAt.is_null())
         .all(db)
         .await?;
     Ok(tenants
@@ -52,7 +54,7 @@ pub async fn find_active_by_slug(
         .await?
         .ok_or(AppError::NotFound)?;
 
-    if !tenant.is_active {
+    if !tenant.is_active || tenant.status != "active" || tenant.deleted_at.is_some() {
         return Err(AppError::Unauthorized);
     }
 
