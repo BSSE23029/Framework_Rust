@@ -26,6 +26,8 @@ pub mod role_designation_departments;
 pub mod role_permissions;
 pub mod roles;
 pub mod sessions;
+pub mod tenant_config_definitions;
+pub mod tenant_config_values;
 pub mod tenant_domains;
 pub mod tenant_lifecycle_notifications;
 pub mod tenant_settings;

@@ -1,60 +1,58 @@
-use axum::Router;
 use utoipa::{
     openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme},
     Modify, OpenApi,
 };
-use utoipa_swagger_ui::SwaggerUi;
+mod swagger;
+pub use swagger::router as swagger_router;
 
-use crate::{
-    handlers::{
-        admin_identity_providers::{CreateIdpRequest, IdpResponse, UpdateIdpRequest},
-        admin_permissions::{
-            AssignPermissionRequest, CreatePermissionRequest, PermissionResponse,
-            UpdatePermissionRequest,
-        },
-        admin_plans::{
-            CreatePlanRequest, PlanResponse, QuotaResponse, SetQuotaRequest, SubscribeRequest,
-            SubscriptionResponse,
-        },
-        admin_roles::{AssignRoleRequest, CreateRoleRequest, RoleResponse, UpdateRoleRequest},
-        admin_sessions::SessionResponse,
-        admin_smtp::{SmtpConfigResponse, UpsertSmtpRequest},
-        admin_tenant_domains::{CreateDomainRequest, DomainResponse},
-        admin_tenant_settings::{
-            LockoutResponse, PolicyResponse, RegistrationResponse, TokenTtlResponse,
-            UpsertLockoutRequest, UpsertPolicyRequest, UpsertRegistrationRequest,
-            UpsertTokenTtlRequest,
-        },
-        admin_users::{
-            CreateUserRequest, PasswordResetTokenResponse, UpdateUserRequest, UserResponse,
-            VerificationCodeResponse,
-        },
-        admin_webauthn::PasskeyInfo,
-        audit_log::AuditLogEntry,
-        clients::{ClientResponse, CreateClientRequest, UpdateClientRequest},
-        forgot_password::ForgotPasswordRequest,
-        login::{LoginRequest, MfaRequiredResponse, TokenResponse},
-        logout::LogoutRequest,
-        mfa::{ChallengeRequest, ConfirmRequest, SetupResponse},
-        oauth_as::{
-            AuthorizeParams, IntrospectRequest, TokenRequest, TokenResponse as OauthTokenResponse,
-        },
-        oauth_revoke::RevokeRequest,
-        passwordless::{
-            PasswordlessRequest, PasswordlessRequestResponse, PasswordlessVerifyRequest,
-        },
-        refresh::RefreshRequest,
-        register::{RegisterRequest, RegisterResponse},
-        reset_password::ResetPasswordRequest,
-        tenants::{CreateTenantRequest, TenantResponse, TenantSlugEntry},
-        trusted_devices::{TrustDeviceRequest, TrustDeviceResponse, TrustedDeviceResponse},
-        verify_email::VerifyOtpRequest,
-        webauthn::{
-            AuthFinishPayload, AuthStartPayload, RegisterFinishPayload,
-            TokenResponse as WebauthnTokenResponse,
-        },
+use crate::handlers::{
+    admin_identity_providers::{CreateIdpRequest, IdpResponse, UpdateIdpRequest},
+    admin_permissions::{
+        AssignPermissionRequest, CreatePermissionRequest, PermissionResponse,
+        UpdatePermissionRequest,
     },
-    state::AppState,
+    admin_plans::{
+        CreatePlanRequest, PlanResponse, QuotaResponse, SetQuotaRequest, SubscribeRequest,
+        SubscriptionResponse,
+    },
+    admin_roles::{AssignRoleRequest, CreateRoleRequest, RoleResponse, UpdateRoleRequest},
+    admin_sessions::SessionResponse,
+    admin_smtp::{SmtpConfigResponse, UpsertSmtpRequest},
+    admin_tenant_domains::{CreateDomainRequest, DomainResponse},
+    admin_tenant_settings::{
+        LockoutResponse, PolicyResponse, RegistrationResponse, TokenTtlResponse,
+        UpsertLockoutRequest, UpsertPolicyRequest, UpsertRegistrationRequest,
+        UpsertTokenTtlRequest,
+    },
+    admin_users::{
+        CreateUserRequest, PasswordResetTokenResponse, UpdateUserRequest, UserResponse,
+        VerificationCodeResponse,
+    },
+    admin_webauthn::PasskeyInfo,
+    audit_log::AuditLogEntry,
+    clients::{ClientResponse, CreateClientRequest, UpdateClientRequest},
+    forgot_password::ForgotPasswordRequest,
+    login::{LoginRequest, MfaRequiredResponse, TokenResponse},
+    logout::LogoutRequest,
+    mfa::{ChallengeRequest, ConfirmRequest, SetupResponse},
+    oauth_as::{
+        AuthorizeParams, IntrospectRequest, TokenRequest, TokenResponse as OauthTokenResponse,
+    },
+    oauth_revoke::RevokeRequest,
+    passwordless::{PasswordlessRequest, PasswordlessRequestResponse, PasswordlessVerifyRequest},
+    refresh::RefreshRequest,
+    register::{RegisterRequest, RegisterResponse},
+    reset_password::ResetPasswordRequest,
+    tenant_config::{
+        ConfigDefinitionResponse, ConfigValueResponse, DefineConfigRequest, SetConfigValueRequest,
+    },
+    tenants::{CreateTenantRequest, TenantResponse, TenantSlugEntry},
+    trusted_devices::{TrustDeviceRequest, TrustDeviceResponse, TrustedDeviceResponse},
+    verify_email::VerifyOtpRequest,
+    webauthn::{
+        AuthFinishPayload, AuthStartPayload, RegisterFinishPayload,
+        TokenResponse as WebauthnTokenResponse,
+    },
 };
 
 struct SecurityAddon;
@@ -125,6 +123,9 @@ impl Modify for SecurityAddon {
         crate::handlers::admin_tenant_settings::put_token_ttl,
         crate::handlers::admin_tenant_settings::get_registration,
         crate::handlers::admin_tenant_settings::put_registration,
+        crate::handlers::tenant_config::list_definitions,
+        crate::handlers::tenant_config::define,
+        crate::handlers::tenant_config::set_value,
         // tenants
         crate::handlers::tenants::list_tenants,
         crate::handlers::tenants::create_tenant,
@@ -260,6 +261,7 @@ impl Modify for SecurityAddon {
             TrustDeviceRequest,
             TrustDeviceResponse,
             TrustedDeviceResponse,
+            DefineConfigRequest, ConfigDefinitionResponse, SetConfigValueRequest, ConfigValueResponse,
         )
     ),
     modifiers(&SecurityAddon),
@@ -281,11 +283,3 @@ impl Modify for SecurityAddon {
     )
 )]
 pub struct ApiDoc;
-
-/// Returns a router that serves:
-/// - `GET /openapi.json` — raw OpenAPI spec
-/// - `GET /docs`         — Swagger UI
-pub fn swagger_router() -> Router<AppState> {
-    let spec = ApiDoc::openapi();
-    Router::new().merge(SwaggerUi::new("/docs").url("/openapi.json", spec))
-}

@@ -25,6 +25,7 @@ pub mod refresh;
 pub mod register;
 pub mod reset_password;
 pub mod revoke;
+pub mod tenant_config;
 pub mod tenants;
 pub mod trusted_devices;
 pub mod verify_email;

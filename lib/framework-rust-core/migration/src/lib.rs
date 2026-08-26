@@ -35,6 +35,7 @@ mod m20240101_000032_trusted_devices;
 mod m20240101_000033_passwordless_email_otp;
 mod m20240101_000034_one_time_token_rls;
 mod m20240101_000035_plans_subscriptions_quotas;
+mod m20240101_000036_typed_tenant_config;
 
 pub struct Migrator;
 
@@ -77,6 +78,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20240101_000033_passwordless_email_otp::Migration),
             Box::new(m20240101_000034_one_time_token_rls::Migration),
             Box::new(m20240101_000035_plans_subscriptions_quotas::Migration),
+            Box::new(m20240101_000036_typed_tenant_config::Migration),
         ]
     }
 }

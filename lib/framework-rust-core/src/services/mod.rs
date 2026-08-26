@@ -20,6 +20,7 @@ pub mod rate_limit_service;
 pub mod role_service;
 pub mod seed_service;
 pub mod session_service;
+pub mod tenant_config_service;
 pub mod tenant_hierarchy_service;
 pub mod tenant_lifecycle_service;
 pub mod tenant_service;
