@@ -13,6 +13,26 @@ pub fn render(frame: &mut Frame, app: &App) {
         render_mfa_challenge(frame, code, error.as_deref());
         return;
     }
+    if let AppMode::Passwordless {
+        email,
+        slug,
+        otp,
+        requested,
+        field,
+        error,
+    } = &app.mode
+    {
+        render_passwordless(
+            frame,
+            email,
+            slug,
+            otp,
+            *requested,
+            *field,
+            error.as_deref(),
+        );
+        return;
+    }
 
     let AppMode::Login {
         email,
@@ -212,6 +232,8 @@ pub fn render(frame: &mut Frame, app: &App) {
             Span::styled(" Pick tenant   ", Style::default().fg(Color::DarkGray)),
             Span::styled("Enter", Style::default().fg(Color::Cyan)),
             Span::styled(" Login   ", Style::default().fg(Color::DarkGray)),
+            Span::styled("F2", Style::default().fg(Color::Cyan)),
+            Span::styled(" Passwordless   ", Style::default().fg(Color::DarkGray)),
             Span::styled("q", Style::default().fg(Color::Cyan)),
             Span::styled(" Quit", Style::default().fg(Color::DarkGray)),
         ]
@@ -228,6 +250,111 @@ pub fn render(frame: &mut Frame, app: &App) {
     frame.render_widget(
         Paragraph::new(Line::from(nav_hint)).alignment(Alignment::Center),
         chunks[hint_idx],
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_passwordless(
+    frame: &mut Frame,
+    email: &str,
+    slug: &str,
+    otp: &str,
+    requested: bool,
+    field: usize,
+    error: Option<&str>,
+) {
+    let size = frame.area();
+    let area = Rect {
+        x: size.x + size.width.saturating_sub(54) / 2,
+        y: size.y + size.height.saturating_sub(17) / 2,
+        width: 54.min(size.width),
+        height: 17.min(size.height),
+    };
+    frame.render_widget(Clear, area);
+    frame.render_widget(
+        Block::default()
+            .title(" Passwordless Email OTP ")
+            .title_alignment(Alignment::Center)
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan)),
+        area,
+    );
+    let inner = Rect {
+        x: area.x + 2,
+        y: area.y + 1,
+        width: area.width.saturating_sub(4),
+        height: area.height.saturating_sub(2),
+    };
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Length(3),
+            Constraint::Length(3),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Min(1),
+        ])
+        .split(inner);
+    let active = |index| {
+        if !requested && field == index {
+            Style::default().fg(Color::Cyan)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        }
+    };
+    frame.render_widget(
+        Paragraph::new(if requested {
+            "Enter the six-digit code sent to your email."
+        } else {
+            "Request a one-time sign-in code."
+        })
+        .alignment(Alignment::Center),
+        chunks[0],
+    );
+    frame.render_widget(
+        Paragraph::new(if requested {
+            email.into()
+        } else {
+            format!("{email}█")
+        })
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Email")
+                .border_style(active(0)),
+        ),
+        chunks[1],
+    );
+    let second = if requested {
+        ("OTP", format!("{otp}█"), Style::default().fg(Color::Cyan))
+    } else {
+        ("Tenant slug", format!("{slug}█"), active(1))
+    };
+    frame.render_widget(
+        Paragraph::new(second.1).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(second.0)
+                .border_style(second.2),
+        ),
+        chunks[2],
+    );
+    if let Some(message) = error {
+        frame.render_widget(
+            Paragraph::new(message).style(Style::default().fg(Color::Red)),
+            chunks[4],
+        );
+    }
+    frame.render_widget(
+        Paragraph::new(if requested {
+            "Enter Verify   Esc Request another code"
+        } else {
+            "Tab Next   Enter Send code   F2 Password login"
+        })
+        .style(Style::default().fg(Color::DarkGray))
+        .alignment(Alignment::Center),
+        chunks[5],
     );
 }
 

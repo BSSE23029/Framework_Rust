@@ -217,6 +217,51 @@ impl Client {
         Ok(body.access_token)
     }
 
+    pub async fn request_passwordless(&self, email: &str, slug: &str) -> ApiResult<()> {
+        let resp = self
+            .inner
+            .post(format!("{}/auth/passwordless/request", self.base_url))
+            .header("x-framework-rust-tenant-slug", slug)
+            .json(&serde_json::json!({ "email": email }))
+            .send()
+            .await?;
+        self.check::<serde_json::Value>(resp).await.map(|_| ())
+    }
+
+    pub async fn verify_passwordless(
+        &self,
+        email: &str,
+        slug: &str,
+        otp: &str,
+    ) -> ApiResult<LoginResult> {
+        #[derive(Deserialize)]
+        struct Response {
+            access_token: Option<String>,
+            mfa_required: Option<bool>,
+            mfa_token: Option<String>,
+        }
+        let resp = self
+            .inner
+            .post(format!("{}/auth/passwordless/verify", self.base_url))
+            .header("x-framework-rust-tenant-slug", slug)
+            .json(&serde_json::json!({ "email": email, "otp": otp }))
+            .send()
+            .await?;
+        let response: Response = self.check(resp).await?;
+        if response.mfa_required == Some(true) {
+            return response
+                .mfa_token
+                .map(|mfa_token| LoginResult::MfaRequired { mfa_token })
+                .ok_or_else(|| ApiError::Api {
+                    status: 500,
+                    message: "MFA challenge token missing".into(),
+                });
+        }
+        Ok(LoginResult::Token(
+            response.access_token.unwrap_or_default(),
+        ))
+    }
+
     pub async fn admin_disable_user_mfa(&self, tenant_id: &str, user_id: &str) -> ApiResult<()> {
         let resp = self
             .inner

@@ -60,7 +60,7 @@ pub async fn run(mut app: App) -> io::Result<()> {
         terminal.draw(|frame| {
             if matches!(
                 &app.mode,
-                AppMode::Login { .. } | AppMode::MfaChallenge { .. }
+                AppMode::Login { .. } | AppMode::MfaChallenge { .. } | AppMode::Passwordless { .. }
             ) {
                 ui::login::render(frame, &app);
                 return;
@@ -494,6 +494,8 @@ pub async fn run(mut app: App) -> io::Result<()> {
                     handle_login_key(&mut app, key.code).await;
                 } else if matches!(&app.mode, AppMode::MfaChallenge { .. }) {
                     handle_mfa_key(&mut app, key.code).await;
+                } else if matches!(&app.mode, AppMode::Passwordless { .. }) {
+                    handle_passwordless_key(&mut app, key.code).await;
                 } else {
                     handle_key(&mut app, key.code, key.modifiers).await;
                 }
@@ -553,6 +555,16 @@ async fn handle_login_key(app: &mut App, code: KeyCode) {
         .unwrap_or(false);
 
     match code {
+        KeyCode::F(2) => {
+            app.mode = AppMode::Passwordless {
+                email,
+                slug: String::new(),
+                otp: String::new(),
+                requested: false,
+                field: 0,
+                error: None,
+            };
+        }
         KeyCode::Char('q') => {
             app.should_quit = true;
         }
@@ -762,6 +774,108 @@ async fn handle_mfa_key(app: &mut App, key: KeyCode) {
         }
         _ => {}
     }
+}
+
+async fn handle_passwordless_key(app: &mut App, key: KeyCode) {
+    let AppMode::Passwordless {
+        mut email,
+        mut slug,
+        mut otp,
+        mut requested,
+        mut field,
+        mut error,
+    } = app.mode.clone()
+    else {
+        return;
+    };
+    match key {
+        KeyCode::F(2) | KeyCode::Esc if !requested => {
+            app.mode = AppMode::Login {
+                email,
+                password: String::new(),
+                field: 0,
+                error: None,
+                tenant_choices: None,
+                tenant_choice_idx: 0,
+            };
+            return;
+        }
+        KeyCode::Esc if requested => {
+            requested = false;
+            otp.clear();
+            field = 0;
+        }
+        KeyCode::Tab if !requested => field = (field + 1) % 2,
+        KeyCode::Backspace => {
+            if requested {
+                otp.pop();
+            } else if field == 0 {
+                email.pop();
+            } else {
+                slug.pop();
+            }
+        }
+        KeyCode::Char(character) => {
+            if requested {
+                if character.is_ascii_digit() && otp.len() < 6 {
+                    otp.push(character);
+                }
+            } else if field == 0 {
+                email.push(character);
+            } else {
+                slug.push(character);
+            }
+        }
+        KeyCode::Enter if !requested && !email.is_empty() && !slug.is_empty() => {
+            match app.client.request_passwordless(&email, &slug).await {
+                Ok(()) => {
+                    requested = true;
+                    field = 0;
+                    error = None;
+                }
+                Err(api_error) => error = Some(api_error.to_string()),
+            }
+        }
+        KeyCode::Enter if requested && otp.len() == 6 => {
+            match app.client.verify_passwordless(&email, &slug, &otp).await {
+                Ok(LoginResult::Token(token)) => {
+                    app.client.set_token(token.clone());
+                    let mut config = config_file::load();
+                    config.token = Some(token);
+                    let _ = config_file::save(&config);
+                    app.mode = AppMode::Admin;
+                    load_tenants(app).await;
+                    check_health(app).await;
+                    return;
+                }
+                Ok(LoginResult::MfaRequired { mfa_token }) => {
+                    app.mode = AppMode::MfaChallenge {
+                        mfa_token,
+                        slug,
+                        code: String::new(),
+                        error: None,
+                    };
+                    return;
+                }
+                Ok(LoginResult::TenantChoice(_)) => {
+                    error = Some("Passwordless login requires a tenant slug".into());
+                }
+                Err(api_error) => {
+                    otp.clear();
+                    error = Some(api_error.to_string());
+                }
+            }
+        }
+        _ => {}
+    }
+    app.mode = AppMode::Passwordless {
+        email,
+        slug,
+        otp,
+        requested,
+        field,
+        error,
+    };
 }
 
 async fn handle_key(app: &mut App, code: KeyCode, _mods: KeyModifiers) {

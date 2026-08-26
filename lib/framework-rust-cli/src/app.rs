@@ -24,6 +24,14 @@ pub enum AppMode {
         code: String,
         error: Option<String>,
     },
+    Passwordless {
+        email: String,
+        slug: String,
+        otp: String,
+        requested: bool,
+        field: usize,
+        error: Option<String>,
+    },
     Admin,
 }
 
