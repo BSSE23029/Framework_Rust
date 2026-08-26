@@ -1,3 +1,4 @@
+pub mod access;
 pub mod audit_log;
 pub mod clients;
 pub mod config;

@@ -22,6 +22,9 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             Focus::Sidebar => "↑↓ Navigate  Enter Open  n New  r Refresh  q Quit",
             Focus::Content => match &app.tab {
                 Tab::Settings => "↑↓ Navigate  Enter Edit  c Context  r Refresh  Esc Back",
+                Tab::Access => {
+                    "[] Section  ↑↓ Navigate  n Create  a Link/assign  d Revoke URDD  r Refresh"
+                }
                 Tab::Sessions => "↑↓ Navigate  d Delete  c Context  r Refresh  Esc Back",
                 Tab::AuditLog => "↑↓ Navigate  c Context  r Refresh  Esc Back",
                 Tab::Domains => {

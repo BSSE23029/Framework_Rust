@@ -55,6 +55,7 @@ pub async fn run(mut app: App) -> io::Result<()> {
     let mut session_list_state = ratatui::widgets::ListState::default();
     let mut role_list_state = ratatui::widgets::ListState::default();
     let mut permission_list_state = ratatui::widgets::ListState::default();
+    let mut access_table_state = ratatui::widgets::TableState::default();
 
     loop {
         terminal.draw(|frame| {
@@ -79,6 +80,9 @@ pub async fn run(mut app: App) -> io::Result<()> {
                 Tab::Roles => ui::roles::render(frame, &app, content_body, &mut role_list_state),
                 Tab::Permissions => {
                     ui::permissions::render(frame, &app, content_body, &mut permission_list_state)
+                }
+                Tab::Access => {
+                    ui::access::render(frame, &app, content_body, &mut access_table_state)
                 }
                 Tab::Sessions => {
                     ui::sessions::render(frame, &app, content_body, &mut session_list_state)
@@ -412,6 +416,11 @@ pub async fn run(mut app: App) -> io::Result<()> {
                     ],
                     *field,
                 ),
+                Modal::AccessForm {
+                    action,
+                    fields,
+                    field,
+                } => modal::render_access_form(frame, *action, fields, *field),
                 Modal::EditPermission {
                     name,
                     description,
@@ -889,6 +898,50 @@ async fn handle_key(app: &mut App, code: KeyCode, _mods: KeyModifiers) {
         }
         Modal::ShowSecret { .. } | Modal::Error(_) => {
             app.modal = Modal::None;
+            return;
+        }
+        Modal::AccessForm {
+            action,
+            mut fields,
+            mut field,
+        } => {
+            match code {
+                KeyCode::Esc => app.modal = Modal::None,
+                KeyCode::Tab | KeyCode::Down => {
+                    field = (field + 1) % fields.len();
+                    app.modal = Modal::AccessForm {
+                        action,
+                        fields,
+                        field,
+                    };
+                }
+                KeyCode::Up => {
+                    field = (field + fields.len() - 1) % fields.len();
+                    app.modal = Modal::AccessForm {
+                        action,
+                        fields,
+                        field,
+                    };
+                }
+                KeyCode::Backspace => {
+                    fields[field].pop();
+                    app.modal = Modal::AccessForm {
+                        action,
+                        fields,
+                        field,
+                    };
+                }
+                KeyCode::Char(value) => {
+                    fields[field].push(value);
+                    app.modal = Modal::AccessForm {
+                        action,
+                        fields,
+                        field,
+                    };
+                }
+                KeyCode::Enter => perform_access_action(app, action, fields).await,
+                _ => {}
+            }
             return;
         }
         Modal::CreateTenant {
@@ -2339,7 +2392,8 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                 Tab::Users => Tab::Clients,
                 Tab::Roles => Tab::Users,
                 Tab::Permissions => Tab::Roles,
-                Tab::Sessions => Tab::Permissions,
+                Tab::Access => Tab::Permissions,
+                Tab::Sessions => Tab::Access,
                 Tab::Settings => Tab::Sessions,
                 Tab::IdentityProviders => Tab::Settings,
                 Tab::Domains => Tab::IdentityProviders,
@@ -2355,7 +2409,8 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                 Tab::Clients => Tab::Users,
                 Tab::Users => Tab::Roles,
                 Tab::Roles => Tab::Permissions,
-                Tab::Permissions => Tab::Sessions,
+                Tab::Permissions => Tab::Access,
+                Tab::Access => Tab::Sessions,
                 Tab::Sessions => Tab::Settings,
                 Tab::Settings => Tab::IdentityProviders,
                 Tab::IdentityProviders => Tab::Domains,
@@ -2399,6 +2454,7 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                     app.permission_selected -= 1;
                 }
             }
+            Tab::Access => app.access_selected = app.access_selected.saturating_sub(1),
             Tab::Sessions => {
                 if app.session_selected > 0 {
                     app.session_selected -= 1;
@@ -2456,6 +2512,11 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
             Tab::Permissions => {
                 if app.permission_selected + 1 < app.permissions.len() {
                     app.permission_selected += 1;
+                }
+            }
+            Tab::Access => {
+                if app.access_selected + 1 < access_section_len(app) {
+                    app.access_selected += 1;
                 }
             }
             Tab::Sessions => {
@@ -2534,6 +2595,14 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                         field: 0,
                     };
                 }
+            }
+            Tab::Access => {
+                let action = app.access_section;
+                app.modal = Modal::AccessForm {
+                    action,
+                    fields: vec![String::new(); modal::access_field_count(action)],
+                    field: 0,
+                };
             }
             Tab::Sessions => {}
             Tab::Settings => {}
@@ -2641,6 +2710,7 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                     };
                 }
             }
+            Tab::Access => {}
             Tab::Sessions => {}
             Tab::Settings => {}
             Tab::AuditLog => {}
@@ -2722,6 +2792,23 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                 }
             }
         }
+        KeyCode::Char('a') if app.tab == Tab::Access => {
+            let action = match app.access_section {
+                2 => Some(7),
+                4 => Some(6),
+                5 => Some(8),
+                _ => None,
+            };
+            if let Some(action) = action {
+                app.modal = Modal::AccessForm {
+                    action,
+                    fields: vec![String::new(); modal::access_field_count(action)],
+                    field: 0,
+                };
+            } else {
+                app.set_status("Link/assign is available in RDDs, Groups, and Scopes");
+            }
+        }
         KeyCode::Char('d') => match app.tab {
             Tab::Clients => {
                 if let Some(c) = app.selected_client() {
@@ -2753,6 +2840,16 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                         id: p.id.clone(),
                         label: p.name.clone(),
                     };
+                }
+            }
+            Tab::Access => {
+                if app.access_section == 3 {
+                    if let Some(context) = app.urdds.get(app.access_selected) {
+                        app.modal = Modal::ConfirmDelete {
+                            id: context.id.clone(),
+                            label: format!("URDD {}", context.id),
+                        };
+                    }
                 }
             }
             Tab::Sessions => {
@@ -2796,6 +2893,14 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
             if let Some(tid) = app.active_tenant_id.clone() {
                 export_audit_log_csv(app, tid).await;
             }
+        }
+        KeyCode::Char('[') if app.tab == Tab::Access => {
+            app.access_section = app.access_section.saturating_sub(1);
+            app.access_selected = 0;
+        }
+        KeyCode::Char(']') if app.tab == Tab::Access => {
+            app.access_section = (app.access_section + 1).min(5);
+            app.access_selected = 0;
         }
         _ => {}
     }
@@ -2947,6 +3052,7 @@ async fn load_current_tab(app: &mut App) {
         Tab::Users => load_users(app, tid).await,
         Tab::Roles => load_roles(app, tid).await,
         Tab::Permissions => load_permissions(app, tid).await,
+        Tab::Access => load_access(app, tid).await,
         Tab::Sessions => load_sessions(app, tid).await,
         Tab::Settings => load_settings(app, tid).await,
         Tab::IdentityProviders => load_idps(app, tid).await,
@@ -2956,6 +3062,167 @@ async fn load_current_tab(app: &mut App) {
         Tab::Security => load_security(app, tid).await,
         Tab::AuditLog => load_audit_log(app, tid).await,
     }
+}
+
+fn access_section_len(app: &App) -> usize {
+    match app.access_section {
+        0 => app.departments.len(),
+        1 => app.designations.len(),
+        2 => app.rdds.len(),
+        3 => app.urdds.len(),
+        4 => app.permission_groups.len(),
+        _ => app.permission_scopes.len(),
+    }
+}
+
+async fn load_access(app: &mut App, tenant_id: String) {
+    app.access_loading = true;
+    let results = tokio::join!(
+        app.client.list_departments(&tenant_id),
+        app.client.list_designations(&tenant_id),
+        app.client.list_rdds(&tenant_id),
+        app.client.list_urdds(&tenant_id),
+        app.client.list_permission_groups(&tenant_id),
+        app.client.list_permission_scopes(&tenant_id),
+    );
+    match results {
+        (Ok(departments), Ok(designations), Ok(rdds), Ok(urdds), Ok(groups), Ok(scopes)) => {
+            app.departments = departments;
+            app.designations = designations;
+            app.rdds = rdds;
+            app.urdds = urdds;
+            app.permission_groups = groups;
+            app.permission_scopes = scopes;
+            app.access_selected = app
+                .access_selected
+                .min(access_section_len(app).saturating_sub(1));
+        }
+        values => {
+            let error = values
+                .0
+                .err()
+                .or_else(|| values.1.err())
+                .or_else(|| values.2.err())
+                .or_else(|| values.3.err())
+                .or_else(|| values.4.err())
+                .or_else(|| values.5.err());
+            if let Some(error) = error {
+                on_load_err(app, error, "Access organization");
+            }
+        }
+    }
+    app.access_loading = false;
+}
+
+async fn perform_access_action(app: &mut App, action: usize, fields: Vec<String>) {
+    let Some(tenant_id) = app.active_tenant_id.clone() else {
+        return;
+    };
+    let required = match action {
+        0 | 1 | 3 | 6 | 7 => &[0, 1][..],
+        2 | 5 | 8 => &[0, 1, 2][..],
+        4 => &[0][..],
+        _ => &[][..],
+    };
+    if required
+        .iter()
+        .any(|index| fields[*index].trim().is_empty())
+    {
+        app.modal = Modal::Error("Required access fields cannot be empty".into());
+        return;
+    }
+    let result = match action {
+        0 => app
+            .client
+            .create_department(&tenant_id, &fields[0], &fields[1], &fields[2])
+            .await
+            .map(|_| "Department created"),
+        1 => app
+            .client
+            .create_designation(
+                &tenant_id,
+                &fields[0],
+                &fields[1],
+                &fields[2],
+                (!fields[3].is_empty()).then_some(fields[3].as_str()),
+            )
+            .await
+            .map(|_| "Designation created"),
+        2 => app
+            .client
+            .create_rdd(&tenant_id, &fields[0], &fields[1], &fields[2])
+            .await
+            .map(|_| "Role/designation/department context created"),
+        3 => {
+            let attributes = parse_access_json(&fields[2]);
+            match attributes {
+                Ok(attributes) => app
+                    .client
+                    .assign_user_context(&tenant_id, &fields[0], &fields[1], attributes)
+                    .await
+                    .map(|_| "User access context assigned"),
+                Err(error) => Err(error),
+            }
+        }
+        4 => app
+            .client
+            .create_permission_group(&tenant_id, &fields[0], &fields[1])
+            .await
+            .map(|_| "Permission group created"),
+        5 => {
+            let conditions = parse_access_json(&fields[4]);
+            match conditions {
+                Ok(conditions) => app
+                    .client
+                    .create_permission_scope(
+                        &tenant_id,
+                        serde_json::json!({
+                            "permission_id": fields[0],
+                            "name": fields[1],
+                            "resource_type": fields[2],
+                            "resource_id": (!fields[3].is_empty()).then_some(fields[3].as_str()),
+                            "conditions": conditions,
+                        }),
+                    )
+                    .await
+                    .map(|_| "Permission scope created"),
+                Err(error) => Err(error),
+            }
+        }
+        6 => app
+            .client
+            .add_group_permission(&tenant_id, &fields[0], &fields[1])
+            .await
+            .map(|_| "Permission added to group"),
+        7 => app
+            .client
+            .link_rdd_group(&tenant_id, &fields[0], &fields[1])
+            .await
+            .map(|_| "Permission group linked to RDD"),
+        _ => app
+            .client
+            .assign_permission_scope(&tenant_id, &fields[0], &fields[1], &fields[2])
+            .await
+            .map(|_| "Permission scope assigned to URDD"),
+    };
+    match result {
+        Ok(message) => {
+            app.modal = Modal::None;
+            app.set_status(message);
+            load_access(app, tenant_id).await;
+        }
+        Err(error) => app.modal = Modal::Error(error.to_string()),
+    }
+}
+
+fn parse_access_json(value: &str) -> Result<serde_json::Value, ApiError> {
+    if value.trim().is_empty() {
+        return Ok(serde_json::json!({}));
+    }
+    serde_json::from_str(value).map_err(|error| ApiError::Api {
+        status: 422,
+        message: format!("Invalid JSON: {error}"),
+    })
 }
 
 async fn load_tenants(app: &mut App) {
@@ -4187,6 +4454,12 @@ async fn perform_delete(app: &mut App, id: String) {
             .delete_permission(&tid, &id)
             .await
             .map(|_| "Permission deleted"),
+        Tab::Access if app.access_section == 3 => app
+            .client
+            .revoke_user_context(&tid, &id)
+            .await
+            .map(|_| "User access context revoked"),
+        Tab::Access => return,
         Tab::Sessions => app
             .client
             .delete_session(&tid, &id)
@@ -4478,4 +4751,20 @@ async fn load_settings(app: &mut App, tid: String) {
         app.settings.smtp_password_set = s.password_set;
     }
     app.settings.loading = false;
+}
+
+#[cfg(test)]
+mod access_tests {
+    use super::parse_access_json;
+
+    #[test]
+    fn access_json_defaults_to_an_empty_object() {
+        assert_eq!(parse_access_json("").unwrap(), serde_json::json!({}));
+    }
+
+    #[test]
+    fn access_json_rejects_malformed_attributes() {
+        let error = parse_access_json("{broken").unwrap_err();
+        assert!(error.to_string().contains("Invalid JSON"));
+    }
 }

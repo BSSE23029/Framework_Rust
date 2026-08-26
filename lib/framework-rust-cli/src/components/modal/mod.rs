@@ -101,11 +101,13 @@ pub fn render_secret(frame: &mut Frame, client_id: &str, secret: &str) {
     frame.render_widget(para, area);
 }
 
+mod access;
 mod forms;
 mod role;
 mod settings;
 mod user;
 
+pub use access::*;
 pub use forms::*;
 pub use role::*;
 pub use settings::*;

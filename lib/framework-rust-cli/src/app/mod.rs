@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
 use crate::api::{
-    AccessContext, AuditLogEntry, Client, ConfigDefinition, IdentityProvider, OAuthClient,
-    Permission, PlanQuota, RequestActivity, Role, Session, Tenant, TenantDomain, TenantPlan,
-    TrustedDevice, User,
+    AccessContext, AuditLogEntry, Client, ConfigDefinition, Department, Designation,
+    IdentityProvider, OAuthClient, Permission, PermissionGroup, PermissionScope, PlanQuota,
+    RequestActivity, Role, RoleDesignationDepartment, Session, Tenant, TenantDomain, TenantPlan,
+    TrustedDevice, User, UserRoleDesignationDepartment,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -41,6 +42,7 @@ pub enum Tab {
     Users,
     Roles,
     Permissions,
+    Access,
     Sessions,
     Settings,
     IdentityProviders,
@@ -202,6 +204,16 @@ pub struct App {
     pub permission_selected: usize,
     pub permissions_loading: bool,
 
+    pub departments: Vec<Department>,
+    pub designations: Vec<Designation>,
+    pub rdds: Vec<RoleDesignationDepartment>,
+    pub urdds: Vec<UserRoleDesignationDepartment>,
+    pub permission_groups: Vec<PermissionGroup>,
+    pub permission_scopes: Vec<PermissionScope>,
+    pub access_section: usize,
+    pub access_selected: usize,
+    pub access_loading: bool,
+
     pub identity_providers: Vec<IdentityProvider>,
     pub idp_selected: usize,
     pub idps_loading: bool,
@@ -280,6 +292,16 @@ impl App {
             permissions: vec![],
             permission_selected: 0,
             permissions_loading: false,
+
+            departments: vec![],
+            designations: vec![],
+            rdds: vec![],
+            urdds: vec![],
+            permission_groups: vec![],
+            permission_scopes: vec![],
+            access_section: 0,
+            access_selected: 0,
+            access_loading: false,
 
             identity_providers: vec![],
             idp_selected: 0,

@@ -126,6 +126,11 @@ pub enum Modal {
         ttl_days: String,
         field: usize,
     },
+    AccessForm {
+        action: usize,
+        fields: Vec<String>,
+        field: usize,
+    },
     EditPermission {
         id: String,
         name: String,

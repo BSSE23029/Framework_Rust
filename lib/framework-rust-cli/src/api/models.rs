@@ -31,6 +31,63 @@ pub struct AccessContext {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct Department {
+    pub id: String,
+    pub name: String,
+    pub code: String,
+    pub description: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Designation {
+    pub id: String,
+    pub name: String,
+    pub code: String,
+    pub description: String,
+    pub senior_designation_id: Option<String>,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RoleDesignationDepartment {
+    pub id: String,
+    pub role_id: String,
+    pub designation_id: String,
+    pub department_id: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UserRoleDesignationDepartment {
+    pub id: String,
+    pub user_id: String,
+    pub role_designation_department_id: String,
+    pub attributes: serde_json::Value,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PermissionGroup {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PermissionScope {
+    pub id: String,
+    pub permission_id: String,
+    pub name: String,
+    pub scope_type: String,
+    pub resource_type: Option<String>,
+    pub resource_id: Option<String>,
+    pub conditions: serde_json::Value,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct TenantDomain {
     pub id: String,
     pub tenant_id: String,

@@ -137,8 +137,17 @@ impl Client {
             })
         }
     }
+
+    async fn check_empty(&self, resp: reqwest::Response) -> ApiResult<()> {
+        let status = resp.status();
+        if status.is_success() {
+            return Ok(());
+        }
+        self.check::<serde_json::Value>(resp).await.map(|_| ())
+    }
 }
 
+mod access;
 mod auth;
 mod identity;
 mod models;
