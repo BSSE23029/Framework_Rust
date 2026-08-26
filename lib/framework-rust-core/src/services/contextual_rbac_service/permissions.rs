@@ -16,7 +16,7 @@ use crate::{
 
 use super::ensure_default_rdd;
 
-pub(super) async fn ensure_urdp(
+pub(crate) async fn ensure_urdp(
     txn: &DatabaseTransaction,
     urdd_id: Uuid,
     permission_id: Uuid,

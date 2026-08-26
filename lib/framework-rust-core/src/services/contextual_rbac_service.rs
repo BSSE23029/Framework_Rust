@@ -14,7 +14,7 @@ use crate::{
 };
 
 mod permissions;
-use permissions::ensure_urdp;
+pub(crate) use permissions::ensure_urdp;
 pub use permissions::{grant_role_permission, revoke_role_permission};
 
 async fn default_department(
