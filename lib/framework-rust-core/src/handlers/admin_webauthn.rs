@@ -8,7 +8,6 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
-    db,
     error::AppError,
     handlers::admin_auth,
     services::{audit_service, tenant_service, webauthn_service},
@@ -58,7 +57,7 @@ pub async fn list_passkeys(
     let tenant_id = extract_tenant_id(&headers)?;
     let _ = tenant_service::find_active(&state.db, tenant_id).await?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     let rows = webauthn_service::list_for_user(&txn, tenant_id, user_id).await?;
     txn.commit().await?;
 
@@ -104,7 +103,7 @@ pub async fn delete_passkey(
     let tenant_id = extract_tenant_id(&headers)?;
     let _ = tenant_service::find_active(&state.db, tenant_id).await?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     webauthn_service::delete(&txn, tenant_id, &credential_id).await?;
     txn.commit().await?;
 

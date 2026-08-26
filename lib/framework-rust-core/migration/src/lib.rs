@@ -37,6 +37,7 @@ mod m20240101_000034_one_time_token_rls;
 mod m20240101_000035_plans_subscriptions_quotas;
 mod m20240101_000036_typed_tenant_config;
 mod m20240101_000037_request_activity;
+mod m20240101_000038_authoritative_actor_audit;
 
 pub struct Migrator;
 
@@ -81,6 +82,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20240101_000035_plans_subscriptions_quotas::Migration),
             Box::new(m20240101_000036_typed_tenant_config::Migration),
             Box::new(m20240101_000037_request_activity::Migration),
+            Box::new(m20240101_000038_authoritative_actor_audit::Migration),
         ]
     }
 }

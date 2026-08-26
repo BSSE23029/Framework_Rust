@@ -1,7 +1,7 @@
 use chrono::Utc;
 use sea_orm::{
-    sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    Set,
+    sea_query::Expr, ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection,
+    EntityTrait, QueryFilter, Set,
 };
 use uuid::Uuid;
 
@@ -34,6 +34,7 @@ pub async fn create(
         expires_at: Set(expires_at),
         created_at: Set(now),
         last_seen_at: Set(now),
+        ..Default::default()
     }
     .insert(db)
     .await?;
@@ -48,6 +49,8 @@ pub async fn find_valid(
     let now = Utc::now().fixed_offset();
     Ok(sessions::Entity::find_by_id(id)
         .filter(sessions::Column::ExpiresAt.gt(now))
+        .filter(sessions::Column::Status.eq("active"))
+        .filter(sessions::Column::DeletedAt.is_null())
         .one(db)
         .await?)
 }
@@ -64,8 +67,14 @@ pub async fn touch(db: &DatabaseConnection, id: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-pub async fn delete(db: &DatabaseConnection, id: &str) -> Result<(), AppError> {
-    sessions::Entity::delete_by_id(id).exec(db).await?;
+pub async fn delete<C: ConnectionTrait>(db: &C, id: &str) -> Result<(), AppError> {
+    let row = sessions::Entity::find_by_id(id)
+        .one(db)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let mut active: sessions::ActiveModel = row.into();
+    active.status = Set("inactive".into());
+    active.update(db).await?;
     Ok(())
 }
 
@@ -77,6 +86,8 @@ pub async fn list_by_tenant(
     Ok(sessions::Entity::find()
         .filter(sessions::Column::TenantId.eq(tenant_id))
         .filter(sessions::Column::ExpiresAt.gt(now))
+        .filter(sessions::Column::Status.eq("active"))
+        .filter(sessions::Column::DeletedAt.is_null())
         .all(db)
         .await?)
 }

@@ -9,7 +9,6 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
-    db,
     error::{validation_to_app_error, AppError},
     handlers::admin_auth,
     services::{audit_service, permission_service},
@@ -79,7 +78,7 @@ pub async fn list_permissions(
     require_admin(&state, &headers)?;
     let tenant_id = extract_tenant_id(&headers)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     let perms = permission_service::list_all(&txn, tenant_id).await?;
     txn.commit().await?;
 
@@ -123,7 +122,7 @@ pub async fn create_permission(
 
     payload.validate().map_err(validation_to_app_error)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     let perm = permission_service::create(
         &txn,
         permission_service::CreatePermissionInput {
@@ -185,7 +184,7 @@ pub async fn update_permission(
 
     payload.validate().map_err(validation_to_app_error)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     permission_service::update(
         &txn,
         id,
@@ -233,7 +232,7 @@ pub async fn delete_permission(
     require_admin(&state, &headers)?;
     let tenant_id = extract_tenant_id(&headers)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     permission_service::delete(&txn, id).await?;
     txn.commit().await?;
 
@@ -276,7 +275,7 @@ pub async fn list_role_permissions(
     require_admin(&state, &headers)?;
     let tenant_id = extract_tenant_id(&headers)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     let perms = permission_service::list_for_role(&txn, role_id, tenant_id).await?;
     txn.commit().await?;
 
@@ -323,7 +322,7 @@ pub async fn assign_role_permission(
     let permission_id = Uuid::parse_str(&payload.permission_id)
         .map_err(|_| AppError::InvalidInput("invalid permission_id".into()))?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     permission_service::assign_to_role(&txn, role_id, permission_id, tenant_id).await?;
     txn.commit().await?;
 
@@ -366,7 +365,7 @@ pub async fn revoke_role_permission(
     require_admin(&state, &headers)?;
     let tenant_id = extract_tenant_id(&headers)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     permission_service::revoke_from_role(&txn, tenant_id, role_id, permission_id).await?;
     txn.commit().await?;
 

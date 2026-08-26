@@ -27,6 +27,7 @@ pub async fn save_credential<C: ConnectionTrait>(
         sign_count: Set(0),
         created_at: Set(Utc::now().into()),
         last_used_at: Set(None),
+        ..Default::default()
     };
     model.insert(db).await?;
     Ok(())
@@ -40,6 +41,8 @@ pub async fn list_for_user<C: ConnectionTrait>(
     Ok(webauthn_credential::Entity::find()
         .filter(webauthn_credential::Column::TenantId.eq(tenant_id))
         .filter(webauthn_credential::Column::UserId.eq(user_id))
+        .filter(webauthn_credential::Column::Status.eq("active"))
+        .filter(webauthn_credential::Column::DeletedAt.is_null())
         .all(db)
         .await?)
 }
@@ -86,14 +89,15 @@ pub async fn delete<C: ConnectionTrait>(
     tenant_id: Uuid,
     credential_id: &str,
 ) -> Result<(), AppError> {
-    let result = webauthn_credential::Entity::delete_many()
+    let row = webauthn_credential::Entity::find()
         .filter(webauthn_credential::Column::TenantId.eq(tenant_id))
         .filter(webauthn_credential::Column::CredentialId.eq(credential_id))
-        .exec(db)
-        .await?;
-    if result.rows_affected == 0 {
-        return Err(AppError::NotFound);
-    }
+        .one(db)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let mut active: webauthn_credential::ActiveModel = row.into();
+    active.status = Set("inactive".into());
+    active.update(db).await?;
     Ok(())
 }
 
@@ -102,11 +106,16 @@ pub async fn delete_all_for_user<C: ConnectionTrait>(
     tenant_id: Uuid,
     user_id: Uuid,
 ) -> Result<(), AppError> {
-    webauthn_credential::Entity::delete_many()
+    let rows = webauthn_credential::Entity::find()
         .filter(webauthn_credential::Column::TenantId.eq(tenant_id))
         .filter(webauthn_credential::Column::UserId.eq(user_id))
-        .exec(db)
+        .all(db)
         .await?;
+    for row in rows {
+        let mut active: webauthn_credential::ActiveModel = row.into();
+        active.status = Set("inactive".into());
+        active.update(db).await?;
+    }
     Ok(())
 }
 

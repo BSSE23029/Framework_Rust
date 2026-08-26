@@ -1,5 +1,5 @@
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ConnectionTrait, DatabaseConnection, EntityTrait, Set};
+use sea_orm::{ActiveModelTrait, ConnectionTrait, EntityTrait, Set};
 use uuid::Uuid;
 
 use crate::{entity::tenant_settings, error::AppError};
@@ -48,8 +48,8 @@ pub async fn get<C: ConnectionTrait>(db: &C, tenant_id: Uuid) -> Result<TenantSe
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn upsert(
-    db: &DatabaseConnection,
+pub async fn upsert<C: ConnectionTrait>(
+    db: &C,
     tenant_id: Uuid,
     lockout_max_attempts: i32,
     lockout_window_minutes: i32,
@@ -85,6 +85,7 @@ pub async fn upsert(
             allow_public_registration: Set(allow_public_registration),
             require_email_verified: Set(require_email_verified),
             updated_at: Set(now),
+            ..Default::default()
         }
         .insert(db)
         .await?;

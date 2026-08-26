@@ -1,7 +1,25 @@
 use axum::http::HeaderMap;
+use sea_orm::DatabaseTransaction;
 use uuid::Uuid;
 
-use crate::{config::Config, error::AppError, services::token_service};
+use crate::{config::Config, db, error::AppError, services::token_service, state::AppState};
+
+pub async fn begin_tenant_txn(
+    state: &AppState,
+    headers: &HeaderMap,
+    tenant_id: Uuid,
+) -> Result<DatabaseTransaction, AppError> {
+    let user_id = extract_actor(headers, &state.config);
+    let requested = headers
+        .get("x-framework-rust-urdd-id")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| Uuid::parse_str(value).ok());
+    let (txn, actor) = db::begin_actor_tenant_txn(&state.db, tenant_id, user_id, requested).await?;
+    if user_id.is_some() && actor.is_none() {
+        return Err(AppError::Unauthorized);
+    }
+    Ok(txn)
+}
 
 /// Extract the acting user's UUID from a Bearer JWT in the Authorization header.
 /// Returns `None` if no token is present or validation fails — callers record

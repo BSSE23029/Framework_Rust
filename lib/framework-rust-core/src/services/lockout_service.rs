@@ -33,6 +33,7 @@ pub async fn record_attempt(
         tenant_id: Set(tenant_id),
         email_lookup: Set(email_lookup.to_string()),
         attempted_at: Set(Utc::now().fixed_offset()),
+        ..Default::default()
     }
     .insert(db)
     .await?;

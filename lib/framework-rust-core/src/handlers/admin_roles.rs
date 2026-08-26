@@ -9,7 +9,6 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
-    db,
     error::{validation_to_app_error, AppError},
     handlers::admin_auth,
     services::{audit_service, role_service},
@@ -79,7 +78,7 @@ pub async fn list_roles(
     require_admin(&state, &headers)?;
     let tenant_id = extract_tenant_id(&headers)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     let roles = role_service::list_all(&txn, tenant_id).await?;
     txn.commit().await?;
 
@@ -123,7 +122,7 @@ pub async fn create_role(
 
     payload.validate().map_err(validation_to_app_error)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     let role = role_service::create(
         &txn,
         role_service::CreateRoleInput {
@@ -185,7 +184,7 @@ pub async fn update_role(
 
     payload.validate().map_err(validation_to_app_error)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     role_service::update(
         &txn,
         id,
@@ -233,7 +232,7 @@ pub async fn delete_role(
     require_admin(&state, &headers)?;
     let tenant_id = extract_tenant_id(&headers)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     role_service::delete(&txn, id).await?;
     txn.commit().await?;
 
@@ -276,7 +275,7 @@ pub async fn list_user_roles(
     require_admin(&state, &headers)?;
     let tenant_id = extract_tenant_id(&headers)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     let roles = role_service::list_for_user(&txn, user_id, tenant_id).await?;
     txn.commit().await?;
 
@@ -323,7 +322,7 @@ pub async fn assign_user_role(
     let role_id = Uuid::parse_str(&payload.role_id)
         .map_err(|_| AppError::InvalidInput("invalid role_id".into()))?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     role_service::assign(&txn, user_id, role_id, tenant_id).await?;
     txn.commit().await?;
 
@@ -366,7 +365,7 @@ pub async fn revoke_user_role(
     require_admin(&state, &headers)?;
     let tenant_id = extract_tenant_id(&headers)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     role_service::revoke(&txn, tenant_id, user_id, role_id).await?;
     txn.commit().await?;
 
@@ -409,7 +408,7 @@ pub async fn list_client_roles(
     require_admin(&state, &headers)?;
     let tenant_id = extract_tenant_id(&headers)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     let roles = role_service::list_for_client(&txn, client_uuid).await?;
     txn.commit().await?;
 
@@ -456,7 +455,7 @@ pub async fn assign_client_role(
     let role_id = Uuid::parse_str(&payload.role_id)
         .map_err(|_| AppError::InvalidInput("invalid role_id".into()))?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     role_service::assign_client_role(&txn, client_uuid, role_id, tenant_id).await?;
     txn.commit().await?;
 
@@ -499,7 +498,7 @@ pub async fn revoke_client_role(
     require_admin(&state, &headers)?;
     let tenant_id = extract_tenant_id(&headers)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     role_service::revoke_client_role(&txn, client_uuid, role_id).await?;
     txn.commit().await?;
 

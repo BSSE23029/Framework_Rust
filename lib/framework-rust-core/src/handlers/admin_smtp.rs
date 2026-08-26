@@ -60,22 +60,27 @@ pub async fn get_smtp(
 ) -> Result<impl IntoResponse, AppError> {
     require_admin(&state, &headers)?;
     let tenant_id = extract_tenant_id(&headers)?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
 
     match tenant_smtp_config::Entity::find_by_id(tenant_id)
-        .one(&state.db)
+        .one(&txn)
         .await?
     {
-        Some(r) => Ok(Json(SmtpConfigResponse {
-            host: r.host,
-            port: r.port,
-            username: r.username,
-            password_set: !r.password_enc.is_empty(),
-            from_name: r.from_name,
-            from_email: r.from_email,
-            use_tls: r.use_tls,
-            enabled: r.enabled,
-            updated_at: r.updated_at.to_rfc3339(),
-        })),
+        Some(r) => {
+            let response = Json(SmtpConfigResponse {
+                host: r.host,
+                port: r.port,
+                username: r.username,
+                password_set: !r.password_enc.is_empty(),
+                from_name: r.from_name,
+                from_email: r.from_email,
+                use_tls: r.use_tls,
+                enabled: r.enabled,
+                updated_at: r.updated_at.to_rfc3339(),
+            });
+            txn.commit().await?;
+            Ok(response)
+        }
         None => Err(AppError::NotFound),
     }
 }
@@ -121,6 +126,7 @@ pub async fn put_smtp(
     let actor = admin_auth::extract_actor(&headers, &state.config);
     require_admin(&state, &headers)?;
     let tenant_id = extract_tenant_id(&headers)?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
 
     req.validate().map_err(validation_to_app_error)?;
     let smtp_host = req.host.clone();
@@ -138,7 +144,7 @@ pub async fn put_smtp(
     let enabled = req.enabled.unwrap_or(false);
 
     let existing = tenant_smtp_config::Entity::find_by_id(tenant_id)
-        .one(&state.db)
+        .one(&txn)
         .await?;
 
     let password_enc = if let Some(pw) = req.password {
@@ -162,7 +168,7 @@ pub async fn put_smtp(
         active.use_tls = Set(use_tls);
         active.enabled = Set(enabled);
         active.updated_at = Set(now);
-        active.update(&state.db).await?;
+        active.update(&txn).await?;
     } else {
         tenant_smtp_config::ActiveModel {
             tenant_id: Set(tenant_id),
@@ -175,10 +181,12 @@ pub async fn put_smtp(
             use_tls: Set(use_tls),
             enabled: Set(enabled),
             updated_at: Set(now),
+            ..Default::default()
         }
-        .insert(&state.db)
+        .insert(&txn)
         .await?;
     }
+    txn.commit().await?;
 
     audit_service::record_best_effort(
         state.db.clone(),

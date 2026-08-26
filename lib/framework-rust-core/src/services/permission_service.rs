@@ -37,6 +37,8 @@ pub async fn list_all(
 ) -> Result<Vec<permissions::Model>, AppError> {
     Ok(permissions::Entity::find()
         .filter(permissions::Column::TenantId.eq(tenant_id))
+        .filter(permissions::Column::Status.eq("active"))
+        .filter(permissions::Column::DeletedAt.is_null())
         .all(txn)
         .await?)
 }
@@ -45,7 +47,11 @@ pub async fn find_by_id(
     txn: &DatabaseTransaction,
     id: Uuid,
 ) -> Result<Option<permissions::Model>, AppError> {
-    Ok(permissions::Entity::find_by_id(id).one(txn).await?)
+    Ok(permissions::Entity::find_by_id(id)
+        .filter(permissions::Column::Status.eq("active"))
+        .filter(permissions::Column::DeletedAt.is_null())
+        .one(txn)
+        .await?)
 }
 
 pub async fn update(
@@ -63,7 +69,13 @@ pub async fn update(
 }
 
 pub async fn delete(txn: &DatabaseTransaction, id: Uuid) -> Result<(), AppError> {
-    permissions::Entity::delete_by_id(id).exec(txn).await?;
+    let permission = permissions::Entity::find_by_id(id)
+        .one(txn)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let mut active: permissions::ActiveModel = permission.into();
+    active.status = Set("inactive".into());
+    active.update(txn).await?;
     Ok(())
 }
 
@@ -90,6 +102,8 @@ pub async fn list_for_role(
     Ok(permissions::Entity::find()
         .filter(permissions::Column::Id.is_in(perm_ids))
         .filter(permissions::Column::TenantId.eq(tenant_id))
+        .filter(permissions::Column::Status.eq("active"))
+        .filter(permissions::Column::DeletedAt.is_null())
         .all(txn)
         .await?)
 }

@@ -1,13 +1,12 @@
-use axum::{extract::State, response::IntoResponse, Extension, Json};
+use axum::{response::IntoResponse, Json};
 use sea_orm::EntityTrait;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     entity::password_policies,
     error::AppError,
-    middleware::tenant::TenantContext,
+    extractors::TenantDb,
     services::{password_policy_service, tenant_settings_service},
-    state::AppState,
 };
 
 // ── Password policy ───────────────────────────────────────────────────────────
@@ -36,29 +35,28 @@ pub struct PolicyResponse {
         ("X-Tenant-ID" = String, Header, description = "Tenant UUID"),
     )
 )]
-pub async fn get_policy(
-    State(state): State<AppState>,
-    Extension(ctx): Extension<TenantContext>,
-) -> Result<impl IntoResponse, AppError> {
-    match password_policies::Entity::find_by_id(ctx.tenant_id)
-        .one(&state.db)
+pub async fn get_policy(db: TenantDb) -> Result<impl IntoResponse, AppError> {
+    let response = match password_policies::Entity::find_by_id(db.tenant_id)
+        .one(&db.txn)
         .await?
     {
-        Some(p) => Ok(Json(PolicyResponse {
+        Some(p) => Json(PolicyResponse {
             min_length: p.min_length,
             require_uppercase: p.require_uppercase,
             require_digit: p.require_digit,
             require_special: p.require_special,
             history_size: p.history_size,
-        })),
-        None => Ok(Json(PolicyResponse {
+        }),
+        None => Json(PolicyResponse {
             min_length: 8,
             require_uppercase: false,
             require_digit: false,
             require_special: false,
             history_size: 0,
-        })),
-    }
+        }),
+    };
+    db.txn.commit().await?;
+    Ok(response)
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -87,8 +85,7 @@ pub struct UpsertPolicyRequest {
     )
 )]
 pub async fn put_policy(
-    State(state): State<AppState>,
-    Extension(ctx): Extension<TenantContext>,
+    db: TenantDb,
     Json(req): Json<UpsertPolicyRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     if req.min_length < 1 || req.min_length > 128 {
@@ -97,8 +94,8 @@ pub async fn put_policy(
         ));
     }
     password_policy_service::upsert(
-        &state.db,
-        ctx.tenant_id,
+        &db.txn,
+        db.tenant_id,
         req.min_length,
         req.require_uppercase,
         req.require_digit,
@@ -106,6 +103,7 @@ pub async fn put_policy(
         req.history_size,
     )
     .await?;
+    db.txn.commit().await?;
     Ok(Json(
         serde_json::json!({ "message": "password policy saved" }),
     ))
@@ -135,16 +133,15 @@ pub struct LockoutResponse {
         ("X-Tenant-ID" = String, Header, description = "Tenant UUID"),
     )
 )]
-pub async fn get_lockout(
-    State(state): State<AppState>,
-    Extension(ctx): Extension<TenantContext>,
-) -> Result<impl IntoResponse, AppError> {
-    let s = tenant_settings_service::get(&state.db, ctx.tenant_id).await?;
-    Ok(Json(LockoutResponse {
+pub async fn get_lockout(db: TenantDb) -> Result<impl IntoResponse, AppError> {
+    let s = tenant_settings_service::get(&db.txn, db.tenant_id).await?;
+    let response = Json(LockoutResponse {
         max_attempts: s.lockout_max_attempts as i32,
         window_minutes: s.lockout_window_minutes as i32,
         duration_minutes: s.lockout_duration_minutes as i32,
-    }))
+    });
+    db.txn.commit().await?;
+    Ok(response)
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -171,8 +168,7 @@ pub struct UpsertLockoutRequest {
     )
 )]
 pub async fn put_lockout(
-    State(state): State<AppState>,
-    Extension(ctx): Extension<TenantContext>,
+    db: TenantDb,
     Json(req): Json<UpsertLockoutRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     if req.max_attempts < 1 || req.window_minutes < 1 || req.duration_minutes < 1 {
@@ -180,10 +176,10 @@ pub async fn put_lockout(
             "all lockout values must be >= 1".into(),
         ));
     }
-    let s = tenant_settings_service::get(&state.db, ctx.tenant_id).await?;
+    let s = tenant_settings_service::get(&db.txn, db.tenant_id).await?;
     tenant_settings_service::upsert(
-        &state.db,
-        ctx.tenant_id,
+        &db.txn,
+        db.tenant_id,
         req.max_attempts,
         req.window_minutes,
         req.duration_minutes,
@@ -193,6 +189,7 @@ pub async fn put_lockout(
         s.require_email_verified,
     )
     .await?;
+    db.txn.commit().await?;
     Ok(Json(
         serde_json::json!({ "message": "lockout policy saved" }),
     ))
@@ -221,15 +218,14 @@ pub struct TokenTtlResponse {
         ("X-Tenant-ID" = String, Header, description = "Tenant UUID"),
     )
 )]
-pub async fn get_token_ttl(
-    State(state): State<AppState>,
-    Extension(ctx): Extension<TenantContext>,
-) -> Result<impl IntoResponse, AppError> {
-    let s = tenant_settings_service::get(&state.db, ctx.tenant_id).await?;
-    Ok(Json(TokenTtlResponse {
+pub async fn get_token_ttl(db: TenantDb) -> Result<impl IntoResponse, AppError> {
+    let s = tenant_settings_service::get(&db.txn, db.tenant_id).await?;
+    let response = Json(TokenTtlResponse {
         access_token_ttl_minutes: s.access_token_ttl_minutes as i32,
         refresh_token_ttl_days: s.refresh_token_ttl_days as i32,
-    }))
+    });
+    db.txn.commit().await?;
+    Ok(response)
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -255,17 +251,16 @@ pub struct UpsertTokenTtlRequest {
     )
 )]
 pub async fn put_token_ttl(
-    State(state): State<AppState>,
-    Extension(ctx): Extension<TenantContext>,
+    db: TenantDb,
     Json(req): Json<UpsertTokenTtlRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     if req.access_token_ttl_minutes < 1 || req.refresh_token_ttl_days < 1 {
         return Err(AppError::InvalidInput("TTL values must be >= 1".into()));
     }
-    let s = tenant_settings_service::get(&state.db, ctx.tenant_id).await?;
+    let s = tenant_settings_service::get(&db.txn, db.tenant_id).await?;
     tenant_settings_service::upsert(
-        &state.db,
-        ctx.tenant_id,
+        &db.txn,
+        db.tenant_id,
         s.lockout_max_attempts as i32,
         s.lockout_window_minutes as i32,
         s.lockout_duration_minutes as i32,
@@ -275,6 +270,7 @@ pub async fn put_token_ttl(
         s.require_email_verified,
     )
     .await?;
+    db.txn.commit().await?;
     Ok(Json(serde_json::json!({ "message": "token TTL saved" })))
 }
 
@@ -301,15 +297,14 @@ pub struct RegistrationResponse {
         ("X-Tenant-ID" = String, Header, description = "Tenant UUID"),
     )
 )]
-pub async fn get_registration(
-    State(state): State<AppState>,
-    Extension(ctx): Extension<TenantContext>,
-) -> Result<impl IntoResponse, AppError> {
-    let s = tenant_settings_service::get(&state.db, ctx.tenant_id).await?;
-    Ok(Json(RegistrationResponse {
+pub async fn get_registration(db: TenantDb) -> Result<impl IntoResponse, AppError> {
+    let s = tenant_settings_service::get(&db.txn, db.tenant_id).await?;
+    let response = Json(RegistrationResponse {
         allow_public_registration: s.allow_public_registration,
         require_email_verified: s.require_email_verified,
-    }))
+    });
+    db.txn.commit().await?;
+    Ok(response)
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -335,14 +330,13 @@ pub struct UpsertRegistrationRequest {
     )
 )]
 pub async fn put_registration(
-    State(state): State<AppState>,
-    Extension(ctx): Extension<TenantContext>,
+    db: TenantDb,
     Json(req): Json<UpsertRegistrationRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let s = tenant_settings_service::get(&state.db, ctx.tenant_id).await?;
+    let s = tenant_settings_service::get(&db.txn, db.tenant_id).await?;
     tenant_settings_service::upsert(
-        &state.db,
-        ctx.tenant_id,
+        &db.txn,
+        db.tenant_id,
         s.lockout_max_attempts as i32,
         s.lockout_window_minutes as i32,
         s.lockout_duration_minutes as i32,
@@ -352,6 +346,7 @@ pub async fn put_registration(
         req.require_email_verified,
     )
     .await?;
+    db.txn.commit().await?;
     Ok(Json(
         serde_json::json!({ "message": "registration policy saved" }),
     ))

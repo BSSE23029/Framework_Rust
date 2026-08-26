@@ -55,14 +55,16 @@ pub async fn set_hierarchy(
         None => None,
     };
 
-    let valid_parent = match (
-        tenant_type,
-        parent.as_ref().map(|row| row.tenant_type.as_str()),
-    ) {
-        ("organization", None) | ("hotel", None) => true,
-        ("hotel", Some("organization")) | ("branch", Some("hotel")) => true,
-        _ => false,
-    };
+    let valid_parent = matches!(
+        (
+            tenant_type,
+            parent.as_ref().map(|row| row.tenant_type.as_str()),
+        ),
+        ("organization", None)
+            | ("hotel", None)
+            | ("hotel", Some("organization"))
+            | ("branch", Some("hotel"))
+    );
     if !valid_parent {
         return Err(AppError::InvalidInput(
             "hierarchy must be organization → hotel → branch".into(),

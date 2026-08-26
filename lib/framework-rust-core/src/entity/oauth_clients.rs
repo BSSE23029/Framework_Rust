@@ -25,6 +25,12 @@ pub struct Model {
     pub created_at: DateTimeWithTimeZone,
     pub access_token_ttl_minutes: Option<i32>,
     pub refresh_token_ttl_days: Option<i32>,
+    pub status: String,
+    pub created_by: Option<Uuid>,
+    pub updated_at: DateTimeWithTimeZone,
+    pub updated_by: Option<Uuid>,
+    pub deleted_at: Option<DateTimeWithTimeZone>,
+    pub deleted_by: Option<Uuid>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

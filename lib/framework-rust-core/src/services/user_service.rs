@@ -50,7 +50,11 @@ pub async fn email_lookup_exists(
 }
 
 pub async fn list_all(txn: &DatabaseTransaction) -> Result<Vec<users::Model>, AppError> {
-    Ok(users::Entity::find().all(txn).await?)
+    Ok(users::Entity::find()
+        .filter(users::Column::Status.eq("active"))
+        .filter(users::Column::DeletedAt.is_null())
+        .all(txn)
+        .await?)
 }
 
 pub async fn deactivate(txn: &DatabaseTransaction, id: Uuid) -> Result<(), AppError> {
@@ -68,6 +72,11 @@ pub async fn set_active(
         .ok_or(AppError::NotFound)?;
     let mut active: users::ActiveModel = user.into();
     active.is_active = Set(is_active);
+    active.status = Set(if is_active { "active" } else { "inactive" }.into());
+    if is_active {
+        active.deleted_at = Set(None);
+        active.deleted_by = Set(None);
+    }
     active.update(txn).await?;
     Ok(())
 }

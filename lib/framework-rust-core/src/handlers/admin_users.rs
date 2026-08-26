@@ -9,7 +9,6 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
-    db,
     entity::one_time_tokens,
     error::{validation_to_app_error, AppError},
     handlers::admin_auth,
@@ -81,7 +80,7 @@ pub async fn list_users(
         &state.config.master_encryption_key,
     )?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     let users = user_service::list_all(&txn).await?;
 
     let mut response: Vec<UserResponse> = Vec::with_capacity(users.len());
@@ -144,7 +143,7 @@ pub async fn create_user(
     let email_normalized = payload.email.trim().to_lowercase();
     let email_lookup = hefesto::hash_for_lookup(&email_normalized, &tenant_key)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
 
     if user_service::email_lookup_exists(&txn, &email_lookup).await? {
         txn.commit().await?;
@@ -240,7 +239,7 @@ pub async fn update_user(
         &state.config.master_encryption_key,
     )?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
 
     if let Some(email) = payload.email {
         let email_normalized = email.trim().to_lowercase();
@@ -303,7 +302,7 @@ pub async fn deactivate_user(
     admin_auth::require_admin(&headers, &state.config, state.master_tenant_id)?;
     let tenant_id = extract_tenant_id(&headers)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     user_service::deactivate(&txn, id).await?;
     txn.commit().await?;
 

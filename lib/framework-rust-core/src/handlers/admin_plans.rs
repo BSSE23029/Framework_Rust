@@ -1,5 +1,4 @@
 use crate::{
-    db,
     entity::{plan_quotas, plans, tenant_subscriptions},
     error::AppError,
     handlers::admin_auth,
@@ -174,7 +173,7 @@ pub async fn subscribe(
     Json(input): Json<SubscribeRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     authorize(&headers, &state, Some(tenant_id))?;
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     let row = plan_service::subscribe(&txn, tenant_id, input.plan_id, input.start_trial).await?;
     txn.commit().await?;
     Ok((StatusCode::CREATED, Json(SubscriptionResponse::from(row))))

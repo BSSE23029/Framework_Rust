@@ -20,6 +20,13 @@ pub struct Model {
     pub nonce: Option<String>,
     pub expires_at: DateTimeWithTimeZone,
     pub used_at: Option<DateTimeWithTimeZone>,
+    pub status: String,
+    pub created_at: DateTimeWithTimeZone,
+    pub created_by: Option<Uuid>,
+    pub updated_at: DateTimeWithTimeZone,
+    pub updated_by: Option<Uuid>,
+    pub deleted_at: Option<DateTimeWithTimeZone>,
+    pub deleted_by: Option<Uuid>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

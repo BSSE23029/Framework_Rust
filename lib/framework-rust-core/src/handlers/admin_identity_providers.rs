@@ -9,7 +9,6 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
-    db,
     error::{validation_to_app_error, AppError},
     handlers::admin_auth,
     services::{audit_service, identity_provider_service, tenant_service},
@@ -86,7 +85,7 @@ pub async fn list_idps(
     require_admin(&state, &headers)?;
     let tenant_id = extract_tenant_id(&headers)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     let idps = identity_provider_service::list(&txn, tenant_id).await?;
     txn.commit().await?;
 
@@ -149,7 +148,7 @@ pub async fn create_idp(
         .scopes
         .unwrap_or_else(|| vec!["openid".into(), "email".into(), "profile".into()]);
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     let idp = identity_provider_service::create(
         &txn,
         identity_provider_service::CreateIdpInput {
@@ -234,7 +233,7 @@ pub async fn update_idp(
         .scopes
         .unwrap_or_else(|| vec!["openid".into(), "email".into(), "profile".into()]);
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     let idp = identity_provider_service::update(
         &txn,
         id,
@@ -293,7 +292,7 @@ pub async fn delete_idp(
     require_admin(&state, &headers)?;
     let tenant_id = extract_tenant_id(&headers)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     identity_provider_service::delete(&txn, id).await?;
     txn.commit().await?;
 

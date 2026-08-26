@@ -32,11 +32,16 @@ pub async fn generate_backup_codes<C: ConnectionTrait>(
     tenant_id: Uuid,
     user_id: Uuid,
 ) -> Result<Vec<String>, AppError> {
-    mfa_backup_codes::Entity::delete_many()
+    let existing = mfa_backup_codes::Entity::find()
         .filter(mfa_backup_codes::Column::TenantId.eq(tenant_id))
         .filter(mfa_backup_codes::Column::UserId.eq(user_id))
-        .exec(db)
+        .all(db)
         .await?;
+    for row in existing {
+        let mut active: mfa_backup_codes::ActiveModel = row.into();
+        active.status = Set("inactive".into());
+        active.update(db).await?;
+    }
 
     let mut codes = Vec::with_capacity(BACKUP_CODE_COUNT);
     for _ in 0..BACKUP_CODE_COUNT {
@@ -69,6 +74,8 @@ pub async fn consume_backup_code<C: ConnectionTrait>(
         .filter(mfa_backup_codes::Column::UserId.eq(user_id))
         .filter(mfa_backup_codes::Column::CodeHash.eq(&code_hash))
         .filter(mfa_backup_codes::Column::UsedAt.is_null())
+        .filter(mfa_backup_codes::Column::Status.eq("active"))
+        .filter(mfa_backup_codes::Column::DeletedAt.is_null())
         .one(db)
         .await?;
 
@@ -78,6 +85,7 @@ pub async fn consume_backup_code<C: ConnectionTrait>(
 
     let mut active: mfa_backup_codes::ActiveModel = record.into();
     active.used_at = Set(Some(chrono::Utc::now().fixed_offset()));
+    active.status = Set("inactive".into());
     active.update(db).await?;
 
     Ok(true)
@@ -88,11 +96,16 @@ pub async fn delete_backup_codes<C: ConnectionTrait>(
     tenant_id: Uuid,
     user_id: Uuid,
 ) -> Result<(), AppError> {
-    mfa_backup_codes::Entity::delete_many()
+    let rows = mfa_backup_codes::Entity::find()
         .filter(mfa_backup_codes::Column::TenantId.eq(tenant_id))
         .filter(mfa_backup_codes::Column::UserId.eq(user_id))
-        .exec(db)
+        .all(db)
         .await?;
+    for row in rows {
+        let mut active: mfa_backup_codes::ActiveModel = row.into();
+        active.status = Set("inactive".into());
+        active.update(db).await?;
+    }
     Ok(())
 }
 
@@ -150,12 +163,22 @@ pub async fn upsert_pending<C: ConnectionTrait>(
     user_id: Uuid,
     secret_enc: String,
 ) -> Result<(), AppError> {
-    // Delete existing (whether enabled or not) before inserting fresh pending
-    totp_secrets::Entity::delete_many()
+    let existing = totp_secrets::Entity::find()
         .filter(totp_secrets::Column::TenantId.eq(tenant_id))
         .filter(totp_secrets::Column::UserId.eq(user_id))
-        .exec(db)
+        .one(db)
         .await?;
+
+    if let Some(row) = existing {
+        let mut active: totp_secrets::ActiveModel = row.into();
+        active.secret_enc = Set(secret_enc);
+        active.enabled = Set(false);
+        active.status = Set("active".into());
+        active.deleted_at = Set(None);
+        active.deleted_by = Set(None);
+        active.update(db).await?;
+        return Ok(());
+    }
 
     totp_secrets::ActiveModel {
         tenant_id: Set(tenant_id),
@@ -192,11 +215,16 @@ pub async fn disable<C: ConnectionTrait>(
     tenant_id: Uuid,
     user_id: Uuid,
 ) -> Result<(), AppError> {
-    totp_secrets::Entity::delete_many()
+    let row = totp_secrets::Entity::find()
         .filter(totp_secrets::Column::TenantId.eq(tenant_id))
         .filter(totp_secrets::Column::UserId.eq(user_id))
-        .exec(db)
-        .await?;
+        .one(db)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let mut active: totp_secrets::ActiveModel = row.into();
+    active.enabled = Set(false);
+    active.status = Set("inactive".into());
+    active.update(db).await?;
     Ok(())
 }
 
@@ -209,6 +237,8 @@ pub async fn find_enabled<C: ConnectionTrait>(
         .filter(totp_secrets::Column::TenantId.eq(tenant_id))
         .filter(totp_secrets::Column::UserId.eq(user_id))
         .filter(totp_secrets::Column::Enabled.eq(true))
+        .filter(totp_secrets::Column::Status.eq("active"))
+        .filter(totp_secrets::Column::DeletedAt.is_null())
         .one(db)
         .await?)
 }
@@ -221,6 +251,8 @@ pub async fn find_any<C: ConnectionTrait>(
     Ok(totp_secrets::Entity::find()
         .filter(totp_secrets::Column::TenantId.eq(tenant_id))
         .filter(totp_secrets::Column::UserId.eq(user_id))
+        .filter(totp_secrets::Column::Status.eq("active"))
+        .filter(totp_secrets::Column::DeletedAt.is_null())
         .one(db)
         .await?)
 }

@@ -2,7 +2,7 @@ use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ConnectionTrait, DatabaseConnection, Set};
 use uuid::Uuid;
 
-use crate::{entity::audit_log, error::AppError};
+use crate::{db, entity::audit_log, error::AppError};
 
 pub struct AuditEvent {
     pub tenant_id: Uuid,
@@ -40,6 +40,7 @@ fn build_model(event: &AuditEvent) -> audit_log::ActiveModel {
             .map(|s| s.to_owned())),
         metadata: Set(Some(event.metadata.to_string())),
         created_at: Set(Utc::now().fixed_offset()),
+        ..Default::default()
     }
 }
 
@@ -54,7 +55,16 @@ pub async fn record<C: ConnectionTrait>(db: &C, event: AuditEvent) -> Result<(),
 /// acceptable (e.g. informational reads, non-critical failures).
 pub fn record_best_effort(db: DatabaseConnection, event: AuditEvent) {
     tokio::spawn(async move {
-        if let Err(e) = build_model(&event).insert(&db).await {
+        let write = async {
+            let (txn, actor) =
+                db::begin_user_tenant_txn(&db, event.tenant_id, event.actor_id).await?;
+            if event.actor_id.is_some() && actor.is_none() {
+                tracing::warn!(action = %event.action, "audit actor has no active URDD");
+            }
+            build_model(&event).insert(&txn).await?;
+            txn.commit().await
+        };
+        if let Err(e) = write.await {
             tracing::warn!(action = %event.action, "audit log write failed: {e}");
         }
     });

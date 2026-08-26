@@ -71,6 +71,9 @@ pub async fn logout(
             token_service::revoke_token(&txn, r).await?;
         }
     }
+    if let Some(session_id) = get_session_cookie(&headers) {
+        let _ = session_service::delete(&txn, &session_id).await;
+    }
     txn.commit().await?;
 
     audit_service::record_best_effort(
@@ -82,11 +85,6 @@ pub async fn logout(
             serde_json::json!({}),
         ),
     );
-
-    // Delete session cookie if present.
-    if let Some(session_id) = get_session_cookie(&headers) {
-        let _ = session_service::delete(&state.db, &session_id).await;
-    }
 
     let secure = if state.config.is_production() {
         "; Secure"

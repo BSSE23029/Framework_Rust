@@ -16,17 +16,23 @@ DECLARE
     actor_id UUID := NULLIF(current_setting('app.actor_urdd_id', true), '')::uuid;
 BEGIN
     IF TG_OP = 'INSERT' THEN
-        NEW.created_by = COALESCE(NEW.created_by, actor_id);
-        NEW.updated_by = COALESCE(NEW.updated_by, actor_id);
+        IF actor_id IS NOT NULL THEN
+            NEW.created_by = actor_id;
+            NEW.updated_by = actor_id;
+        END IF;
         RETURN NEW;
     END IF;
 
     NEW.updated_at = now();
-    NEW.updated_by = COALESCE(actor_id, NEW.updated_by);
+    IF actor_id IS NOT NULL THEN
+        NEW.updated_by = actor_id;
+    END IF;
 
     IF NEW.status = 'inactive' AND OLD.status IS DISTINCT FROM NEW.status THEN
         NEW.deleted_at = COALESCE(NEW.deleted_at, now());
-        NEW.deleted_by = COALESCE(NEW.deleted_by, actor_id);
+        IF actor_id IS NOT NULL THEN
+            NEW.deleted_by = actor_id;
+        END IF;
     ELSIF NEW.status = 'active' AND OLD.status IS DISTINCT FROM NEW.status THEN
         NEW.deleted_at = NULL;
         NEW.deleted_by = NULL;

@@ -42,6 +42,8 @@ pub async fn list_all(
 ) -> Result<Vec<roles::Model>, AppError> {
     Ok(roles::Entity::find()
         .filter(roles::Column::TenantId.eq(tenant_id))
+        .filter(roles::Column::Status.eq("active"))
+        .filter(roles::Column::DeletedAt.is_null())
         .all(txn)
         .await?)
 }
@@ -50,7 +52,11 @@ pub async fn find_by_id(
     txn: &DatabaseTransaction,
     id: Uuid,
 ) -> Result<Option<roles::Model>, AppError> {
-    Ok(roles::Entity::find_by_id(id).one(txn).await?)
+    Ok(roles::Entity::find_by_id(id)
+        .filter(roles::Column::Status.eq("active"))
+        .filter(roles::Column::DeletedAt.is_null())
+        .one(txn)
+        .await?)
 }
 
 pub async fn update(
@@ -68,7 +74,13 @@ pub async fn update(
 }
 
 pub async fn delete(txn: &DatabaseTransaction, id: Uuid) -> Result<(), AppError> {
-    roles::Entity::delete_by_id(id).exec(txn).await?;
+    let role = roles::Entity::find_by_id(id)
+        .one(txn)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let mut active = role.into_active_model();
+    active.status = Set("inactive".into());
+    active.update(txn).await?;
     Ok(())
 }
 
@@ -106,6 +118,8 @@ pub async fn list_for_user(
     Ok(roles::Entity::find()
         .filter(roles::Column::Id.is_in(role_ids))
         .filter(roles::Column::TenantId.eq(tenant_id))
+        .filter(roles::Column::Status.eq("active"))
+        .filter(roles::Column::DeletedAt.is_null())
         .all(txn)
         .await?)
 }

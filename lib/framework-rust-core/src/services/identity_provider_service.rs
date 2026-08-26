@@ -42,6 +42,8 @@ pub async fn find_by_provider(
 ) -> Result<Option<identity_providers::Model>, AppError> {
     Ok(identity_providers::Entity::find()
         .filter(identity_providers::Column::TenantId.eq(tenant_id))
+        .filter(identity_providers::Column::Status.eq("active"))
+        .filter(identity_providers::Column::DeletedAt.is_null())
         .filter(identity_providers::Column::Provider.eq(provider))
         .filter(identity_providers::Column::Enabled.eq(true))
         .one(txn)
@@ -82,9 +84,14 @@ pub async fn update(
 }
 
 pub async fn delete(txn: &DatabaseTransaction, id: Uuid) -> Result<(), AppError> {
-    identity_providers::Entity::delete_by_id(id)
-        .exec(txn)
-        .await?;
+    let row = identity_providers::Entity::find_by_id(id)
+        .one(txn)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let mut active = row.into_active_model();
+    active.status = Set("inactive".into());
+    active.enabled = Set(false);
+    active.update(txn).await?;
     Ok(())
 }
 

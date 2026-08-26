@@ -9,7 +9,6 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
-    db,
     error::{validation_to_app_error, AppError},
     handlers::admin_auth,
     services::{audit_service, client_service},
@@ -94,7 +93,7 @@ pub async fn create_client(
         ));
     }
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
 
     let (model, plain_secret) = client_service::create(
         &txn,
@@ -166,7 +165,7 @@ pub async fn list_clients(
     admin_auth::require_admin(&headers, &state.config, state.master_tenant_id)?;
     let tenant_id = extract_tenant_id(&headers)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     let models = client_service::list(&txn).await?;
     txn.commit().await?;
 
@@ -244,7 +243,7 @@ pub async fn update_client(
         ));
     }
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     let model = client_service::update(
         &txn,
         id,
@@ -314,7 +313,7 @@ pub async fn deactivate_client(
     admin_auth::require_admin(&headers, &state.config, state.master_tenant_id)?;
     let tenant_id = extract_tenant_id(&headers)?;
 
-    let txn = db::begin_tenant_txn(&state.db, tenant_id).await?;
+    let txn = admin_auth::begin_tenant_txn(&state, &headers, tenant_id).await?;
     client_service::deactivate(&txn, id).await?;
     txn.commit().await?;
 

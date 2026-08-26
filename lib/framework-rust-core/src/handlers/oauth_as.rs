@@ -134,6 +134,7 @@ pub async fn authorize(
         nonce: Set(params.nonce),
         expires_at: Set(expires_at),
         used_at: Set(None),
+        ..Default::default()
     }
     .insert(&txn)
     .await?;

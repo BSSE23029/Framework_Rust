@@ -206,6 +206,7 @@ pub async fn revoke_jti(
     revoked_jtis::ActiveModel {
         jti: Set(jti.to_owned()),
         expires_at: Set(expires_at),
+        ..Default::default()
     }
     .insert(db)
     .await

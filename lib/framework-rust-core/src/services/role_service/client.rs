@@ -1,5 +1,8 @@
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, Set};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, IntoActiveModel, QueryFilter,
+    Set,
+};
 use uuid::Uuid;
 
 use crate::{
@@ -13,6 +16,8 @@ pub async fn list_for_client(
 ) -> Result<Vec<roles::Model>, AppError> {
     let role_ids: Vec<Uuid> = client_roles::Entity::find()
         .filter(client_roles::Column::OauthClientId.eq(oauth_client_id))
+        .filter(client_roles::Column::Status.eq("active"))
+        .filter(client_roles::Column::DeletedAt.is_null())
         .all(txn)
         .await?
         .into_iter()
@@ -48,6 +53,8 @@ pub async fn list_client_role_names_for_user(
 
     let client_role_ids: std::collections::HashSet<Uuid> = client_roles::Entity::find()
         .filter(client_roles::Column::OauthClientId.eq(oauth_client_id))
+        .filter(client_roles::Column::Status.eq("active"))
+        .filter(client_roles::Column::DeletedAt.is_null())
         .all(txn)
         .await?
         .into_iter()
@@ -79,11 +86,24 @@ pub async fn assign_client_role(
     tenant_id: Uuid,
 ) -> Result<(), AppError> {
     let now = Utc::now().fixed_offset();
+    if let Some(row) = client_roles::Entity::find_by_id((oauth_client_id, role_id))
+        .one(txn)
+        .await?
+    {
+        let mut active = row.into_active_model();
+        active.status = Set("active".into());
+        active.deleted_at = Set(None);
+        active.deleted_by = Set(None);
+        active.assigned_at = Set(now);
+        active.update(txn).await?;
+        return Ok(());
+    }
     client_roles::ActiveModel {
         oauth_client_id: Set(oauth_client_id),
         role_id: Set(role_id),
         tenant_id: Set(tenant_id),
         assigned_at: Set(now),
+        ..Default::default()
     }
     .insert(txn)
     .await
@@ -96,8 +116,12 @@ pub async fn revoke_client_role(
     oauth_client_id: Uuid,
     role_id: Uuid,
 ) -> Result<(), AppError> {
-    client_roles::Entity::delete_by_id((oauth_client_id, role_id))
-        .exec(txn)
-        .await?;
+    let row = client_roles::Entity::find_by_id((oauth_client_id, role_id))
+        .one(txn)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let mut active = row.into_active_model();
+    active.status = Set("inactive".into());
+    active.update(txn).await?;
     Ok(())
 }

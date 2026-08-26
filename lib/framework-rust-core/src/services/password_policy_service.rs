@@ -1,5 +1,5 @@
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ConnectionTrait, DatabaseConnection, EntityTrait, Set};
+use sea_orm::{ActiveModelTrait, ConnectionTrait, EntityTrait, Set};
 use uuid::Uuid;
 
 use crate::{entity::password_policies, error::AppError};
@@ -40,8 +40,8 @@ pub async fn get<C: ConnectionTrait>(db: &C, tenant_id: Uuid) -> Result<Policy, 
     }
 }
 
-pub async fn upsert(
-    db: &DatabaseConnection,
+pub async fn upsert<C: ConnectionTrait>(
+    db: &C,
     tenant_id: Uuid,
     min_length: i32,
     require_uppercase: bool,
@@ -71,6 +71,7 @@ pub async fn upsert(
             require_special: Set(require_special),
             history_size: Set(history_size),
             updated_at: Set(now),
+            ..Default::default()
         }
         .insert(db)
         .await?;

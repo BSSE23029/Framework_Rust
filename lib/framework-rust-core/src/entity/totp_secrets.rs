@@ -12,6 +12,12 @@ pub struct Model {
     pub secret_enc: String,
     pub enabled: bool,
     pub created_at: DateTimeWithTimeZone,
+    pub status: String,
+    pub created_by: Option<Uuid>,
+    pub updated_at: DateTimeWithTimeZone,
+    pub updated_by: Option<Uuid>,
+    pub deleted_at: Option<DateTimeWithTimeZone>,
+    pub deleted_by: Option<Uuid>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
