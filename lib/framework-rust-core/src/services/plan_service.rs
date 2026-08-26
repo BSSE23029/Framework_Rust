@@ -1,6 +1,6 @@
 use chrono::{Duration, Utc};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, DatabaseTransaction, EntityTrait,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait,
     IntoActiveModel, QueryFilter, Set,
 };
 use serde_json::Value;
@@ -21,8 +21,8 @@ pub struct CreatePlanInput {
     pub features: Value,
 }
 
-pub async fn create(
-    db: &DatabaseConnection,
+pub async fn create<C: ConnectionTrait>(
+    db: &C,
     input: CreatePlanInput,
 ) -> Result<plans::Model, AppError> {
     if !matches!(
@@ -49,8 +49,8 @@ pub async fn create(
     .await?)
 }
 
-pub async fn set_quota(
-    db: &DatabaseConnection,
+pub async fn set_quota<C: ConnectionTrait>(
+    db: &C,
     plan_id: Uuid,
     resource: &str,
     limit: i64,

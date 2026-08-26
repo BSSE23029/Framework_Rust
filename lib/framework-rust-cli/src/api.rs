@@ -59,15 +59,15 @@ impl Client {
                 format!("Bearer {token}").parse().unwrap(),
             );
         }
+        if let Some(urdd_id) = &self.actor_urdd_id {
+            map.insert("x-framework-rust-urdd-id", urdd_id.parse().unwrap());
+        }
         map
     }
 
     fn tenant_headers(&self, tenant_id: &str) -> reqwest::header::HeaderMap {
         let mut map = self.auth_headers();
         map.insert("x-framework-rust-tenant-id", tenant_id.parse().unwrap());
-        if let Some(urdd_id) = &self.actor_urdd_id {
-            map.insert("x-framework-rust-urdd-id", urdd_id.parse().unwrap());
-        }
         map
     }
 
@@ -323,6 +323,95 @@ impl Client {
                 message: format!("domain {action} failed"),
             })
         }
+    }
+
+    pub async fn list_plans(&self) -> ApiResult<Vec<TenantPlan>> {
+        let resp = self
+            .inner
+            .get(format!("{}/plans", self.base_url))
+            .headers(self.auth_headers())
+            .send()
+            .await?;
+        self.check(resp).await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_plan(
+        &self,
+        code: &str,
+        name: &str,
+        billing_interval: &str,
+        price_cents: i64,
+        currency: &str,
+        trial_days: i32,
+    ) -> ApiResult<TenantPlan> {
+        let resp = self
+            .inner
+            .post(format!("{}/plans", self.base_url))
+            .headers(self.auth_headers())
+            .json(&serde_json::json!({
+                "code": code,
+                "name": name,
+                "billing_interval": billing_interval,
+                "price_cents": price_cents,
+                "currency": currency,
+                "trial_days": trial_days,
+                "features": {},
+            }))
+            .send()
+            .await?;
+        self.check(resp).await
+    }
+
+    pub async fn list_plan_quotas(&self, plan_id: &str) -> ApiResult<Vec<PlanQuota>> {
+        let resp = self
+            .inner
+            .get(format!("{}/plans/{plan_id}/quotas", self.base_url))
+            .headers(self.auth_headers())
+            .send()
+            .await?;
+        self.check(resp).await
+    }
+
+    pub async fn set_plan_quota(
+        &self,
+        plan_id: &str,
+        resource: &str,
+        limit: i64,
+    ) -> ApiResult<PlanQuota> {
+        let resp = self
+            .inner
+            .put(format!(
+                "{}/plans/{plan_id}/quotas/{resource}",
+                self.base_url
+            ))
+            .headers(self.auth_headers())
+            .json(&serde_json::json!({ "limit": limit }))
+            .send()
+            .await?;
+        self.check(resp).await
+    }
+
+    pub async fn subscribe_tenant(
+        &self,
+        tenant_id: &str,
+        plan_id: &str,
+        start_trial: bool,
+    ) -> ApiResult<TenantSubscription> {
+        let resp = self
+            .inner
+            .post(format!(
+                "{}/tenants/{tenant_id}/subscription",
+                self.base_url
+            ))
+            .headers(self.tenant_headers(tenant_id))
+            .json(&serde_json::json!({
+                "plan_id": plan_id,
+                "start_trial": start_trial,
+            }))
+            .send()
+            .await?;
+        self.check(resp).await
     }
 
     pub async fn create_tenant(&self, name: &str, slug: &str) -> ApiResult<Tenant> {
@@ -1242,6 +1331,36 @@ pub struct TenantDomain {
     pub verified_at: Option<String>,
     pub ssl_enabled: bool,
     pub status: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TenantPlan {
+    pub id: String,
+    pub code: String,
+    pub name: String,
+    pub billing_interval: String,
+    pub price_cents: i64,
+    pub currency: String,
+    pub trial_days: i32,
+    pub features: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PlanQuota {
+    pub id: String,
+    pub resource: String,
+    pub limit: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TenantSubscription {
+    pub id: String,
+    pub tenant_id: String,
+    pub plan_id: String,
+    pub state: String,
+    pub starts_at: String,
+    pub trial_ends_at: Option<String>,
+    pub ends_at: Option<String>,
 }
 
 #[cfg(test)]

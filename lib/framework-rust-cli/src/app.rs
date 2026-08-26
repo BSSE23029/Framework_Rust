@@ -1,6 +1,6 @@
 use crate::api::{
     AccessContext, AuditLogEntry, Client, IdentityProvider, OAuthClient, PasskeyInfo, Permission,
-    Role, Session, Tenant, TenantDomain, User,
+    PlanQuota, Role, Session, Tenant, TenantDomain, TenantPlan, User,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -34,6 +34,7 @@ pub enum Tab {
     Settings,
     IdentityProviders,
     Domains,
+    Plans,
     AuditLog,
 }
 
@@ -248,6 +249,20 @@ pub enum Modal {
         is_primary: bool,
         field: usize,
     },
+    CreatePlan {
+        code: String,
+        name: String,
+        interval: String,
+        price_cents: String,
+        currency: String,
+        trial_days: String,
+        field: usize,
+    },
+    SetPlanQuota {
+        resource: String,
+        limit: String,
+        field: usize,
+    },
     EditPermission {
         id: String,
         name: String,
@@ -310,6 +325,11 @@ pub struct App {
     pub domains: Vec<TenantDomain>,
     pub domain_selected: usize,
     pub domains_loading: bool,
+
+    pub plans: Vec<TenantPlan>,
+    pub plan_selected: usize,
+    pub plans_loading: bool,
+    pub plan_quotas: Vec<PlanQuota>,
 
     pub active_tenant_id: Option<String>,
     pub access_contexts: Vec<AccessContext>,
@@ -376,6 +396,11 @@ impl App {
             domain_selected: 0,
             domains_loading: false,
 
+            plans: vec![],
+            plan_selected: 0,
+            plans_loading: false,
+            plan_quotas: vec![],
+
             active_tenant_id: None,
             access_contexts: vec![],
             access_context_selected: 0,
@@ -420,6 +445,10 @@ impl App {
 
     pub fn selected_domain(&self) -> Option<&TenantDomain> {
         self.domains.get(self.domain_selected)
+    }
+
+    pub fn selected_plan(&self) -> Option<&TenantPlan> {
+        self.plans.get(self.plan_selected)
     }
 
     pub fn set_status(&mut self, msg: impl Into<String>) {

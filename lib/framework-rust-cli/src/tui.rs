@@ -47,6 +47,8 @@ pub async fn run(mut app: App) -> io::Result<()> {
     let mut idp_table = StatefulTable::new();
     let mut audit_table = StatefulTable::new();
     let mut domain_table = StatefulTable::new();
+    let mut plan_table = StatefulTable::new();
+    let mut quota_table = StatefulTable::new();
     let mut session_list_state = ratatui::widgets::ListState::default();
     let mut role_list_state = ratatui::widgets::ListState::default();
     let mut permission_list_state = ratatui::widgets::ListState::default();
@@ -83,6 +85,9 @@ pub async fn run(mut app: App) -> io::Result<()> {
                     ui::identity_providers::render(frame, &app, content_body, &mut idp_table)
                 }
                 Tab::Domains => ui::domains::render(frame, &app, content_body, &mut domain_table),
+                Tab::Plans => {
+                    ui::plans::render(frame, &app, content_body, &mut plan_table, &mut quota_table)
+                }
                 Tab::AuditLog => ui::audit_log::render(frame, &app, content_body, &mut audit_table),
             }
 
@@ -324,6 +329,40 @@ pub async fn run(mut app: App) -> io::Result<()> {
                         *field,
                     );
                 }
+                Modal::CreatePlan {
+                    code,
+                    name,
+                    interval,
+                    price_cents,
+                    currency,
+                    trial_days,
+                    field,
+                } => modal::render_form(
+                    frame,
+                    "New Plan",
+                    &[
+                        ("Code", code, "pro"),
+                        ("Name", name, "Professional"),
+                        ("Interval", interval, "monthly/yearly/one_time/lifetime"),
+                        ("Price cents", price_cents, "2500"),
+                        ("Currency", currency, "USD"),
+                        ("Trial days", trial_days, "14"),
+                    ],
+                    *field,
+                ),
+                Modal::SetPlanQuota {
+                    resource,
+                    limit,
+                    field,
+                } => modal::render_form(
+                    frame,
+                    "Set Plan Quota",
+                    &[
+                        ("Resource", resource, "users/storage_mb/api_requests"),
+                        ("Limit", limit, "-1 means unlimited"),
+                    ],
+                    *field,
+                ),
                 Modal::EditPermission {
                     name,
                     description,
@@ -1710,6 +1749,112 @@ async fn handle_key(app: &mut App, code: KeyCode, _mods: KeyModifiers) {
             }
             return;
         }
+        Modal::CreatePlan {
+            code: mut plan_code,
+            mut name,
+            mut interval,
+            mut price_cents,
+            mut currency,
+            mut trial_days,
+            mut field,
+        } => {
+            match code {
+                KeyCode::Esc => app.modal = Modal::None,
+                KeyCode::Tab => field = (field + 1) % 6,
+                KeyCode::Enter
+                    if !plan_code.is_empty()
+                        && !name.is_empty()
+                        && price_cents.parse::<i64>().is_ok()
+                        && trial_days.parse::<i32>().is_ok() =>
+                {
+                    app.modal = Modal::None;
+                    perform_create_plan(
+                        app,
+                        plan_code,
+                        name,
+                        interval,
+                        price_cents.parse().unwrap_or_default(),
+                        currency,
+                        trial_days.parse().unwrap_or_default(),
+                    )
+                    .await;
+                    return;
+                }
+                KeyCode::Backspace => {
+                    let values = [
+                        &mut plan_code,
+                        &mut name,
+                        &mut interval,
+                        &mut price_cents,
+                        &mut currency,
+                        &mut trial_days,
+                    ];
+                    values[field].pop();
+                }
+                KeyCode::Char(character) => {
+                    let values = [
+                        &mut plan_code,
+                        &mut name,
+                        &mut interval,
+                        &mut price_cents,
+                        &mut currency,
+                        &mut trial_days,
+                    ];
+                    values[field].push(character);
+                }
+                _ => {}
+            }
+            if !matches!(app.modal, Modal::None) {
+                app.modal = Modal::CreatePlan {
+                    code: plan_code,
+                    name,
+                    interval,
+                    price_cents,
+                    currency,
+                    trial_days,
+                    field,
+                };
+            }
+            return;
+        }
+        Modal::SetPlanQuota {
+            mut resource,
+            mut limit,
+            mut field,
+        } => {
+            match code {
+                KeyCode::Esc => app.modal = Modal::None,
+                KeyCode::Tab => field = (field + 1) % 2,
+                KeyCode::Enter if !resource.is_empty() && limit.parse::<i64>().is_ok() => {
+                    app.modal = Modal::None;
+                    perform_set_plan_quota(app, resource, limit.parse().unwrap_or_default()).await;
+                    return;
+                }
+                KeyCode::Backspace => {
+                    if field == 0 {
+                        resource.pop();
+                    } else {
+                        limit.pop();
+                    }
+                }
+                KeyCode::Char(character) => {
+                    if field == 0 {
+                        resource.push(character);
+                    } else {
+                        limit.push(character);
+                    }
+                }
+                _ => {}
+            }
+            if !matches!(app.modal, Modal::None) {
+                app.modal = Modal::SetPlanQuota {
+                    resource,
+                    limit,
+                    field,
+                };
+            }
+            return;
+        }
         Modal::EditPermission {
             id,
             mut name,
@@ -1901,7 +2046,8 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                 Tab::Settings => Tab::Sessions,
                 Tab::IdentityProviders => Tab::Settings,
                 Tab::Domains => Tab::IdentityProviders,
-                Tab::AuditLog => Tab::Domains,
+                Tab::Plans => Tab::Domains,
+                Tab::AuditLog => Tab::Plans,
             };
             load_current_tab(app).await;
         }
@@ -1914,7 +2060,8 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                 Tab::Sessions => Tab::Settings,
                 Tab::Settings => Tab::IdentityProviders,
                 Tab::IdentityProviders => Tab::Domains,
-                Tab::Domains => Tab::AuditLog,
+                Tab::Domains => Tab::Plans,
+                Tab::Plans => Tab::AuditLog,
                 Tab::AuditLog => Tab::Clients,
             };
             load_current_tab(app).await;
@@ -1967,6 +2114,12 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                     app.domain_selected -= 1;
                 }
             }
+            Tab::Plans => {
+                if app.plan_selected > 0 {
+                    app.plan_selected -= 1;
+                    load_selected_plan_quotas(app).await;
+                }
+            }
             Tab::AuditLog => {
                 if app.audit_log_selected > 0 {
                     app.audit_log_selected -= 1;
@@ -2008,6 +2161,12 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
             Tab::Domains => {
                 if app.domain_selected + 1 < app.domains.len() {
                     app.domain_selected += 1;
+                }
+            }
+            Tab::Plans => {
+                if app.plan_selected + 1 < app.plans.len() {
+                    app.plan_selected += 1;
+                    load_selected_plan_quotas(app).await;
                 }
             }
             Tab::AuditLog => {
@@ -2067,6 +2226,17 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                         field: 0,
                     };
                 }
+            }
+            Tab::Plans => {
+                app.modal = Modal::CreatePlan {
+                    code: String::new(),
+                    name: String::new(),
+                    interval: "monthly".into(),
+                    price_cents: "0".into(),
+                    currency: "USD".into(),
+                    trial_days: "14".into(),
+                    field: 0,
+                };
             }
             Tab::IdentityProviders => {
                 if app.active_tenant_id.is_some() {
@@ -2137,6 +2307,7 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
             Tab::Settings => {}
             Tab::AuditLog => {}
             Tab::Domains => {}
+            Tab::Plans => {}
             Tab::IdentityProviders => {
                 if let Some(idp) = app.selected_idp() {
                     app.modal = Modal::EditIdp {
@@ -2173,6 +2344,16 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
         }
         KeyCode::Char('p') if app.tab == Tab::Domains => {
             perform_domain_action(app, "primary").await;
+        }
+        KeyCode::Char('u') if app.tab == Tab::Plans && app.selected_plan().is_some() => {
+            app.modal = Modal::SetPlanQuota {
+                resource: String::new(),
+                limit: String::new(),
+                field: 0,
+            };
+        }
+        KeyCode::Char('s') if app.tab == Tab::Plans => {
+            perform_subscribe_plan(app).await;
         }
         KeyCode::Char('m') if app.tab == Tab::Users => {
             if let (Some(u), Some(tid)) =
@@ -2242,6 +2423,7 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                     };
                 }
             }
+            Tab::Plans => {}
             Tab::IdentityProviders => {
                 if let Some(idp) = app.selected_idp() {
                     app.modal = Modal::ConfirmDelete {
@@ -2267,7 +2449,7 @@ async fn load_all(app: &mut App) {
     load_access_contexts(app, &tid).await;
     let client = app.client.clone();
 
-    let (clients_r, users_r, roles_r, perms_r, sessions_r, idps_r, domains_r, audit_r) = tokio::join!(
+    let (clients_r, users_r, roles_r, perms_r, sessions_r, idps_r, domains_r, plans_r, audit_r) = tokio::join!(
         client.list_clients(&tid),
         client.list_users(&tid),
         client.list_roles(&tid),
@@ -2275,6 +2457,7 @@ async fn load_all(app: &mut App) {
         client.list_sessions(&tid),
         client.list_identity_providers(&tid),
         client.list_domains(&tid),
+        client.list_plans(),
         client.list_audit_log(&tid),
     );
 
@@ -2349,6 +2532,14 @@ async fn load_all(app: &mut App) {
         }
         Err(e) => on_load_err(app, e, "Domains"),
     }
+    match plans_r {
+        Ok(list) => {
+            app.plan_selected = app.plan_selected.min(list.len().saturating_sub(1));
+            app.plans = list;
+            load_selected_plan_quotas(app).await;
+        }
+        Err(e) => on_load_err(app, e, "Plans"),
+    }
 }
 
 async fn load_current_tab(app: &mut App) {
@@ -2364,6 +2555,7 @@ async fn load_current_tab(app: &mut App) {
         Tab::Settings => load_settings(app, tid).await,
         Tab::IdentityProviders => load_idps(app, tid).await,
         Tab::Domains => load_domains(app, tid).await,
+        Tab::Plans => load_plans(app).await,
         Tab::AuditLog => load_audit_log(app, tid).await,
     }
 }
@@ -2957,6 +3149,31 @@ async fn load_domains(app: &mut App, tenant_id: String) {
     app.domains_loading = false;
 }
 
+async fn load_plans(app: &mut App) {
+    app.plans_loading = true;
+    match app.client.list_plans().await {
+        Ok(list) => {
+            app.plan_selected = app.plan_selected.min(list.len().saturating_sub(1));
+            app.plans = list;
+            load_selected_plan_quotas(app).await;
+            app.clear_status();
+        }
+        Err(error) => on_load_err(app, error, "Plans"),
+    }
+    app.plans_loading = false;
+}
+
+async fn load_selected_plan_quotas(app: &mut App) {
+    let Some(plan_id) = app.selected_plan().map(|plan| plan.id.clone()) else {
+        app.plan_quotas.clear();
+        return;
+    };
+    match app.client.list_plan_quotas(&plan_id).await {
+        Ok(quotas) => app.plan_quotas = quotas,
+        Err(error) => on_load_err(app, error, "Plan quotas"),
+    }
+}
+
 async fn load_audit_log(app: &mut App, tenant_id: String) {
     app.audit_log = vec![];
     app.audit_log_selected = 0;
@@ -3365,6 +3582,62 @@ async fn perform_domain_action(app: &mut App, action: &str) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+async fn perform_create_plan(
+    app: &mut App,
+    code: String,
+    name: String,
+    interval: String,
+    price_cents: i64,
+    currency: String,
+    trial_days: i32,
+) {
+    match app
+        .client
+        .create_plan(&code, &name, &interval, price_cents, &currency, trial_days)
+        .await
+    {
+        Ok(_) => {
+            app.set_status(format!("Plan '{name}' created"));
+            load_plans(app).await;
+        }
+        Err(error) => app.modal = Modal::Error(error.to_string()),
+    }
+}
+
+async fn perform_set_plan_quota(app: &mut App, resource: String, limit: i64) {
+    let Some(plan_id) = app.selected_plan().map(|plan| plan.id.clone()) else {
+        return;
+    };
+    match app.client.set_plan_quota(&plan_id, &resource, limit).await {
+        Ok(_) => {
+            app.set_status(format!("Quota '{resource}' updated"));
+            load_selected_plan_quotas(app).await;
+        }
+        Err(error) => app.modal = Modal::Error(error.to_string()),
+    }
+}
+
+async fn perform_subscribe_plan(app: &mut App) {
+    let Some(tenant_id) = app.active_tenant_id.clone() else {
+        return;
+    };
+    let Some(plan) = app.selected_plan().cloned() else {
+        return;
+    };
+    match app
+        .client
+        .subscribe_tenant(&tenant_id, &plan.id, plan.trial_days > 0)
+        .await
+    {
+        Ok(subscription) => app.set_status(format!(
+            "Tenant subscribed to {} ({})",
+            plan.name, subscription.state
+        )),
+        Err(error) => app.modal = Modal::Error(error.to_string()),
+    }
+}
+
 async fn perform_delete(app: &mut App, id: String) {
     app.modal = Modal::None;
     let Some(tid) = app.active_tenant_id.clone() else {
@@ -3403,6 +3676,7 @@ async fn perform_delete(app: &mut App, id: String) {
             .domain_action(&tid, &id, "deactivate")
             .await
             .map(|_| "Domain deactivated"),
+        Tab::Plans => return,
         Tab::IdentityProviders => app
             .client
             .delete_identity_provider(&tid, &id)

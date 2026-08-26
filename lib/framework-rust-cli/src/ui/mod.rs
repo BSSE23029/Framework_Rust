@@ -5,6 +5,7 @@ pub mod identity_providers;
 pub mod layout;
 pub mod login;
 pub mod permissions;
+pub mod plans;
 pub mod quickstart;
 pub mod roles;
 pub mod sessions;

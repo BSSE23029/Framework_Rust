@@ -1,5 +1,5 @@
 use axum::http::HeaderMap;
-use sea_orm::DatabaseTransaction;
+use sea_orm::{DatabaseTransaction, TransactionTrait};
 use uuid::Uuid;
 
 use crate::{config::Config, db, error::AppError, services::token_service, state::AppState};
@@ -22,6 +22,28 @@ pub async fn begin_tenant_txn(
         db::begin_cross_tenant_actor_txn(&state.db, tenant_id, actor_tenant_id, user_id, requested)
             .await?;
     if user_id.is_some() && actor.is_none() {
+        return Err(AppError::Unauthorized);
+    }
+    Ok(txn)
+}
+
+/// Starts a transaction for global admin tables such as plans. Bearer-authenticated
+/// actions carry the performer's home-tenant URDD; admin-key automation remains
+/// an explicitly unattributed system action.
+pub async fn begin_global_txn(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Result<DatabaseTransaction, AppError> {
+    let Some((user_id, actor_tenant_id)) = extract_actor_identity(headers, &state.config) else {
+        return Ok(state.db.begin().await?);
+    };
+    let requested = headers
+        .get("x-framework-rust-urdd-id")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| Uuid::parse_str(value).ok());
+    let (txn, actor) =
+        db::begin_actor_tenant_txn(&state.db, actor_tenant_id, Some(user_id), requested).await?;
+    if actor.is_none() {
         return Err(AppError::Unauthorized);
     }
     Ok(txn)

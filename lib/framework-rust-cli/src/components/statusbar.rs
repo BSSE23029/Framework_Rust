@@ -27,6 +27,9 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                 Tab::Domains => {
                     "↑↓ Navigate  n New  v Verify  p Primary  d Deactivate  c Context  r Refresh"
                 }
+                Tab::Plans => {
+                    "↑↓ Navigate  n New  u Set quota  s Subscribe/trial  c Context  r Refresh"
+                }
                 Tab::Users => {
                     "↑↓ Navigate  n New  e Edit  d Deactivate  c Context  r Refresh  Esc Back"
                 }

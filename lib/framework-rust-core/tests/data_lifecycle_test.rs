@@ -2,7 +2,7 @@ use framework_rust_core::{
     config::Config,
     db,
     entity::{roles, tenants, user_role_designation_departments},
-    services::{role_service, user_service},
+    services::{plan_service, role_service, user_service},
 };
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{
@@ -221,4 +221,24 @@ async fn performer_urdd_controls_create_update_delete_and_restore() {
         .rollback()
         .await
         .expect("cross-tenant rollback");
+
+    let (global, _) = db::begin_actor_tenant_txn(&database, tenant.id, Some(user.id), Some(actor))
+        .await
+        .expect("global actor transaction");
+    let plan = plan_service::create(
+        &global,
+        plan_service::CreatePlanInput {
+            code: format!("audited-{suffix}"),
+            name: "Audited plan".into(),
+            billing_interval: "monthly".into(),
+            price_cents: 100,
+            currency: "USD".into(),
+            trial_days: 7,
+            features: serde_json::json!({}),
+        },
+    )
+    .await
+    .expect("global plan");
+    assert_eq!(plan.created_by, Some(actor));
+    global.rollback().await.expect("global rollback");
 }

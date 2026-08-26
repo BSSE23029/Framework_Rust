@@ -110,12 +110,14 @@ pub async fn list(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, AppError> {
-    authorize(&headers, &state, None)?;
+    admin_auth::require_admin(&headers, &state.config, state.master_tenant_id)?;
+    let txn = admin_auth::begin_global_txn(&state, &headers).await?;
     let rows = plans::Entity::find()
         .filter(plans::Column::Status.eq("active"))
         .filter(plans::Column::DeletedAt.is_null())
-        .all(&state.db)
+        .all(&txn)
         .await?;
+    txn.commit().await?;
     Ok(Json(
         rows.into_iter().map(PlanResponse::from).collect::<Vec<_>>(),
     ))
@@ -129,8 +131,9 @@ pub async fn create(
     Json(input): Json<CreatePlanRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     authorize(&headers, &state, None)?;
+    let txn = admin_auth::begin_global_txn(&state, &headers).await?;
     let row = plan_service::create(
-        &state.db,
+        &txn,
         plan_service::CreatePlanInput {
             code: input.code,
             name: input.name,
@@ -142,6 +145,7 @@ pub async fn create(
         },
     )
     .await?;
+    txn.commit().await?;
     Ok((StatusCode::CREATED, Json(PlanResponse::from(row))))
 }
 
@@ -155,7 +159,9 @@ pub async fn set_quota(
     Json(input): Json<SetQuotaRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     authorize(&headers, &state, None)?;
-    let row = plan_service::set_quota(&state.db, plan_id, &resource, input.limit).await?;
+    let txn = admin_auth::begin_global_txn(&state, &headers).await?;
+    let row = plan_service::set_quota(&txn, plan_id, &resource, input.limit).await?;
+    txn.commit().await?;
     Ok(Json(QuotaResponse {
         id: row.id,
         resource: row.resource,
@@ -184,11 +190,15 @@ pub async fn list_quotas(
     headers: HeaderMap,
     Path(plan_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
-    authorize(&headers, &state, None)?;
+    admin_auth::require_admin(&headers, &state.config, state.master_tenant_id)?;
+    let txn = admin_auth::begin_global_txn(&state, &headers).await?;
     let rows = plan_quotas::Entity::find()
         .filter(plan_quotas::Column::PlanId.eq(plan_id))
-        .all(&state.db)
+        .filter(plan_quotas::Column::Status.eq("active"))
+        .filter(plan_quotas::Column::DeletedAt.is_null())
+        .all(&txn)
         .await?;
+    txn.commit().await?;
     Ok(Json(
         rows.into_iter()
             .map(|row| QuotaResponse {
