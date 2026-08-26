@@ -20,6 +20,7 @@ pub struct CreateDepartmentRequest {
     pub description: String,
 }
 
+#[utoipa::path(get, path = "/admin/tenants/{tenant_id}/access/departments", tag = "admin-access", responses((status = 200, description = "Departments")), security(("admin_key" = [])))]
 pub async fn list_departments(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -31,6 +32,7 @@ pub async fn list_departments(
     Ok(Json(rows))
 }
 
+#[utoipa::path(post, path = "/admin/tenants/{tenant_id}/access/departments", tag = "admin-access", request_body = CreateDepartmentRequest, responses((status = 201, description = "Department created")), security(("admin_key" = [])))]
 pub async fn create_department(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -59,6 +61,7 @@ pub struct CreateDesignationRequest {
     pub senior_designation_id: Option<Uuid>,
 }
 
+#[utoipa::path(get, path = "/admin/tenants/{tenant_id}/access/designations", tag = "admin-access", responses((status = 200, description = "Designations")), security(("admin_key" = [])))]
 pub async fn list_designations(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -70,6 +73,7 @@ pub async fn list_designations(
     Ok(Json(rows))
 }
 
+#[utoipa::path(post, path = "/admin/tenants/{tenant_id}/access/designations", tag = "admin-access", request_body = CreateDesignationRequest, responses((status = 201, description = "Designation created")), security(("admin_key" = [])))]
 pub async fn create_designation(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -97,6 +101,7 @@ pub struct CreateRddRequest {
     pub department_id: Uuid,
 }
 
+#[utoipa::path(get, path = "/admin/tenants/{tenant_id}/access/rdds", tag = "admin-access", responses((status = 200, description = "Role-designation-department contexts")), security(("admin_key" = [])))]
 pub async fn list_rdds(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -108,6 +113,7 @@ pub async fn list_rdds(
     Ok(Json(rows))
 }
 
+#[utoipa::path(post, path = "/admin/tenants/{tenant_id}/access/rdds", tag = "admin-access", request_body = CreateRddRequest, responses((status = 201, description = "RDD created")), security(("admin_key" = [])))]
 pub async fn create_rdd(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -139,6 +145,7 @@ fn default_attributes() -> Value {
     serde_json::json!({})
 }
 
+#[utoipa::path(get, path = "/admin/tenants/{tenant_id}/access/urdds", tag = "admin-access", responses((status = 200, description = "User access contexts")), security(("admin_key" = [])))]
 pub async fn list_urdds(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -150,6 +157,7 @@ pub async fn list_urdds(
     Ok(Json(rows))
 }
 
+#[utoipa::path(post, path = "/admin/tenants/{tenant_id}/access/urdds", tag = "admin-access", request_body = AssignUserContextRequest, responses((status = 201, description = "User context assigned")), security(("admin_key" = [])))]
 pub async fn assign_user_context(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -169,6 +177,7 @@ pub async fn assign_user_context(
     Ok((StatusCode::CREATED, Json(row)))
 }
 
+#[utoipa::path(delete, path = "/admin/tenants/{tenant_id}/access/urdds/{urdd_id}", tag = "admin-access", responses((status = 204, description = "User context revoked")), security(("admin_key" = [])))]
 pub async fn revoke_user_context(
     State(state): State<AppState>,
     headers: HeaderMap,

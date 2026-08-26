@@ -27,6 +27,12 @@ pub struct TenantHierarchyResponse {
     pub status: String,
 }
 
+#[utoipa::path(
+    put, path = "/admin/tenants/{tenant_id}/hierarchy", tag = "admin-access",
+    request_body = SetTenantHierarchyRequest,
+    responses((status = 204, description = "Tenant hierarchy updated")),
+    security(("admin_key" = []))
+)]
 pub async fn set_hierarchy(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -46,6 +52,11 @@ pub async fn set_hierarchy(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(
+    get, path = "/admin/tenants/{tenant_id}/children", tag = "admin-access",
+    responses((status = 200, description = "Active child tenants", body = Vec<TenantHierarchyResponse>)),
+    security(("admin_key" = []))
+)]
 pub async fn list_children(
     State(state): State<AppState>,
     headers: HeaderMap,

@@ -23,6 +23,7 @@ pub struct CreatePermissionGroupRequest {
     pub description: String,
 }
 
+#[utoipa::path(get, path = "/admin/tenants/{tenant_id}/access/permission-groups", tag = "admin-access", responses((status = 200, description = "Permission groups")), security(("admin_key" = [])))]
 pub async fn list_groups(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -34,6 +35,7 @@ pub async fn list_groups(
     Ok(Json(rows))
 }
 
+#[utoipa::path(post, path = "/admin/tenants/{tenant_id}/access/permission-groups", tag = "admin-access", request_body = CreatePermissionGroupRequest, responses((status = 201, description = "Permission group created")), security(("admin_key" = [])))]
 pub async fn create_group(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -48,6 +50,7 @@ pub async fn create_group(
     Ok((StatusCode::CREATED, Json(row)))
 }
 
+#[utoipa::path(post, path = "/admin/tenants/{tenant_id}/access/permission-groups/{group_id}/permissions/{permission_id}", tag = "admin-access", responses((status = 204, description = "Permission added to group")), security(("admin_key" = [])))]
 pub async fn add_group_permission(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -59,6 +62,7 @@ pub async fn add_group_permission(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(post, path = "/admin/tenants/{tenant_id}/access/rdds/{rdd_id}/permission-groups/{group_id}", tag = "admin-access", responses((status = 204, description = "Group linked to RDD")), security(("admin_key" = [])))]
 pub async fn link_rdd_group(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -84,6 +88,7 @@ fn default_conditions() -> Value {
     serde_json::json!({})
 }
 
+#[utoipa::path(get, path = "/admin/tenants/{tenant_id}/access/permission-scopes", tag = "admin-access", responses((status = 200, description = "Permission scopes")), security(("admin_key" = [])))]
 pub async fn list_scopes(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -95,6 +100,7 @@ pub async fn list_scopes(
     Ok(Json(rows))
 }
 
+#[utoipa::path(post, path = "/admin/tenants/{tenant_id}/access/permission-scopes", tag = "admin-access", request_body = CreatePermissionScopeRequest, responses((status = 201, description = "Permission scope created")), security(("admin_key" = [])))]
 pub async fn create_scope(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -118,6 +124,7 @@ pub async fn create_scope(
     Ok((StatusCode::CREATED, Json(row)))
 }
 
+#[utoipa::path(post, path = "/admin/tenants/{tenant_id}/access/urdds/{urdd_id}/permissions/{permission_id}/scopes/{scope_id}", tag = "admin-access", responses((status = 204, description = "Scope assigned to contextual permission")), security(("admin_key" = [])))]
 pub async fn assign_scope(
     State(state): State<AppState>,
     headers: HeaderMap,

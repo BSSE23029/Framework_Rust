@@ -7,6 +7,13 @@ pub use swagger::router as swagger_router;
 
 use crate::handlers::{
     access_context::AccessContextResponse,
+    admin_access::{
+        organizations::{
+            AssignUserContextRequest, CreateDepartmentRequest, CreateDesignationRequest,
+            CreateRddRequest,
+        },
+        permissions::{CreatePermissionGroupRequest, CreatePermissionScopeRequest},
+    },
     admin_identity_providers::{CreateIdpRequest, IdpResponse, UpdateIdpRequest},
     admin_permissions::{
         AssignPermissionRequest, CreatePermissionRequest, PermissionResponse,
@@ -48,6 +55,7 @@ use crate::handlers::{
     tenant_config::{
         ConfigDefinitionResponse, ConfigValueResponse, DefineConfigRequest, SetConfigValueRequest,
     },
+    tenant_hierarchy::{SetTenantHierarchyRequest, TenantHierarchyResponse},
     tenants::{CreateTenantRequest, TenantResponse, TenantSlugEntry},
     trusted_devices::{TrustDeviceRequest, TrustDeviceResponse, TrustedDeviceResponse},
     verify_email::VerifyOtpRequest,
@@ -136,6 +144,24 @@ impl Modify for SecurityAddon {
         crate::handlers::tenants::list_tenant_slugs,
         crate::handlers::admin_tenant_domains::list_domains,
         crate::handlers::admin_tenant_domains::create_domain,
+        crate::handlers::tenant_hierarchy::set_hierarchy,
+        crate::handlers::tenant_hierarchy::list_children,
+        crate::handlers::admin_access::organizations::list_departments,
+        crate::handlers::admin_access::organizations::create_department,
+        crate::handlers::admin_access::organizations::list_designations,
+        crate::handlers::admin_access::organizations::create_designation,
+        crate::handlers::admin_access::organizations::list_rdds,
+        crate::handlers::admin_access::organizations::create_rdd,
+        crate::handlers::admin_access::organizations::list_urdds,
+        crate::handlers::admin_access::organizations::assign_user_context,
+        crate::handlers::admin_access::organizations::revoke_user_context,
+        crate::handlers::admin_access::permissions::list_groups,
+        crate::handlers::admin_access::permissions::create_group,
+        crate::handlers::admin_access::permissions::add_group_permission,
+        crate::handlers::admin_access::permissions::link_rdd_group,
+        crate::handlers::admin_access::permissions::list_scopes,
+        crate::handlers::admin_access::permissions::create_scope,
+        crate::handlers::admin_access::permissions::assign_scope,
         // clients
         crate::handlers::clients::list_clients,
         crate::handlers::clients::create_client,
@@ -228,6 +254,14 @@ impl Modify for SecurityAddon {
             CreateTenantRequest,
             DomainResponse,
             CreateDomainRequest,
+            SetTenantHierarchyRequest,
+            TenantHierarchyResponse,
+            CreateDepartmentRequest,
+            CreateDesignationRequest,
+            CreateRddRequest,
+            AssignUserContextRequest,
+            CreatePermissionGroupRequest,
+            CreatePermissionScopeRequest,
             ClientResponse,
             CreateClientRequest,
             UpdateClientRequest,
@@ -280,6 +314,7 @@ impl Modify for SecurityAddon {
         (name = "clients", description = "OAuth client management (admin)"),
         (name = "admin-users", description = "User management (admin)"),
         (name = "admin-roles", description = "Role and permission management (admin)"),
+        (name = "admin-access", description = "Tenant hierarchy and contextual access management (admin)"),
         (name = "plans", description = "Plans, quotas, and tenant subscriptions (admin)"),
         (name = "admin-sessions", description = "Session management (admin)"),
         (name = "admin-smtp", description = "SMTP configuration (admin)"),
@@ -289,3 +324,25 @@ impl Modify for SecurityAddon {
     )
 )]
 pub struct ApiDoc;
+
+#[cfg(test)]
+mod tests {
+    use super::{ApiDoc, OpenApi};
+
+    #[test]
+    fn contextual_access_paths_are_documented() {
+        let document = ApiDoc::openapi();
+        for path in [
+            "/admin/tenants/{tenant_id}/hierarchy",
+            "/admin/tenants/{tenant_id}/children",
+            "/admin/tenants/{tenant_id}/access/departments",
+            "/admin/tenants/{tenant_id}/access/designations",
+            "/admin/tenants/{tenant_id}/access/rdds",
+            "/admin/tenants/{tenant_id}/access/urdds",
+            "/admin/tenants/{tenant_id}/access/permission-groups",
+            "/admin/tenants/{tenant_id}/access/permission-scopes",
+        ] {
+            assert!(document.paths.paths.contains_key(path), "missing {path}");
+        }
+    }
+}
