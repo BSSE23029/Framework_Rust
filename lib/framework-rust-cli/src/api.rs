@@ -414,6 +414,85 @@ impl Client {
         self.check(resp).await
     }
 
+    pub async fn list_config_definitions(
+        &self,
+        tenant_id: &str,
+    ) -> ApiResult<Vec<ConfigDefinition>> {
+        let resp = self
+            .inner
+            .get(format!("{}/settings/config/definitions", self.base_url))
+            .headers(self.tenant_headers(tenant_id))
+            .send()
+            .await?;
+        self.check(resp).await
+    }
+
+    pub async fn resolve_config_value(
+        &self,
+        tenant_id: &str,
+        definition_id: &str,
+    ) -> ApiResult<Option<serde_json::Value>> {
+        #[derive(Deserialize)]
+        struct Response {
+            value: Option<serde_json::Value>,
+        }
+        let resp = self
+            .inner
+            .get(format!("{}/settings/config/{definition_id}", self.base_url))
+            .headers(self.tenant_headers(tenant_id))
+            .send()
+            .await?;
+        Ok(self.check::<Response>(resp).await?.value)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn define_config(
+        &self,
+        tenant_id: &str,
+        config_key: &str,
+        display_name: &str,
+        category: &str,
+        value_type: &str,
+        default_value: Option<serde_json::Value>,
+    ) -> ApiResult<ConfigDefinition> {
+        let resp = self
+            .inner
+            .post(format!("{}/settings/config/definitions", self.base_url))
+            .headers(self.tenant_headers(tenant_id))
+            .json(&serde_json::json!({
+                "config_key": config_key,
+                "display_name": display_name,
+                "description": "Created from the admin TUI",
+                "category": category,
+                "scope_type": "tenant",
+                "value_type": value_type,
+                "is_required": default_value.is_some(),
+                "is_multi_value": false,
+                "default_value": default_value,
+                "allowed_values": null,
+                "constraints": {},
+            }))
+            .send()
+            .await?;
+        self.check(resp).await
+    }
+
+    pub async fn set_config_value(
+        &self,
+        tenant_id: &str,
+        definition_id: &str,
+        value: serde_json::Value,
+    ) -> ApiResult<ConfigValue> {
+        let resp = self
+            .inner
+            .put(format!("{}/settings/config/{definition_id}", self.base_url))
+            .headers(self.tenant_headers(tenant_id))
+            .json(&serde_json::json!({ "scope_id": null, "value": value }))
+            .send()
+            .await?;
+        self.check(resp).await
+    }
+
     pub async fn create_tenant(&self, name: &str, slug: &str) -> ApiResult<Tenant> {
         let resp = self
             .inner
@@ -1361,6 +1440,30 @@ pub struct TenantSubscription {
     pub starts_at: String,
     pub trial_ends_at: Option<String>,
     pub ends_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ConfigDefinition {
+    pub id: String,
+    pub config_key: String,
+    pub display_name: String,
+    pub category: String,
+    pub scope_type: String,
+    pub value_type: String,
+    pub is_required: bool,
+    pub is_multi_value: bool,
+    pub default_value: Option<serde_json::Value>,
+    pub allowed_values: Option<serde_json::Value>,
+    pub constraints: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ConfigValue {
+    pub id: String,
+    pub definition_id: String,
+    pub scope_type: String,
+    pub scope_id: Option<String>,
+    pub value: serde_json::Value,
 }
 
 #[cfg(test)]

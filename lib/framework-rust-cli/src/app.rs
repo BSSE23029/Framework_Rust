@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use crate::api::{
-    AccessContext, AuditLogEntry, Client, IdentityProvider, OAuthClient, PasskeyInfo, Permission,
-    PlanQuota, Role, Session, Tenant, TenantDomain, TenantPlan, User,
+    AccessContext, AuditLogEntry, Client, ConfigDefinition, IdentityProvider, OAuthClient,
+    PasskeyInfo, Permission, PlanQuota, Role, Session, Tenant, TenantDomain, TenantPlan, User,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -35,6 +37,7 @@ pub enum Tab {
     IdentityProviders,
     Domains,
     Plans,
+    Config,
     AuditLog,
 }
 
@@ -263,6 +266,17 @@ pub enum Modal {
         limit: String,
         field: usize,
     },
+    DefineConfig {
+        config_key: String,
+        display_name: String,
+        category: String,
+        value_type: String,
+        default_value: String,
+        field: usize,
+    },
+    SetConfigValue {
+        value: String,
+    },
     EditPermission {
         id: String,
         name: String,
@@ -330,6 +344,11 @@ pub struct App {
     pub plan_selected: usize,
     pub plans_loading: bool,
     pub plan_quotas: Vec<PlanQuota>,
+
+    pub config_definitions: Vec<ConfigDefinition>,
+    pub config_selected: usize,
+    pub config_loading: bool,
+    pub config_values: HashMap<String, String>,
 
     pub active_tenant_id: Option<String>,
     pub access_contexts: Vec<AccessContext>,
@@ -401,6 +420,11 @@ impl App {
             plans_loading: false,
             plan_quotas: vec![],
 
+            config_definitions: vec![],
+            config_selected: 0,
+            config_loading: false,
+            config_values: HashMap::new(),
+
             active_tenant_id: None,
             access_contexts: vec![],
             access_context_selected: 0,
@@ -449,6 +473,10 @@ impl App {
 
     pub fn selected_plan(&self) -> Option<&TenantPlan> {
         self.plans.get(self.plan_selected)
+    }
+
+    pub fn selected_config(&self) -> Option<&ConfigDefinition> {
+        self.config_definitions.get(self.config_selected)
     }
 
     pub fn set_status(&mut self, msg: impl Into<String>) {

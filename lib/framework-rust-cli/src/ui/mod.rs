@@ -1,5 +1,6 @@
 pub mod audit_log;
 pub mod clients;
+pub mod config;
 pub mod domains;
 pub mod identity_providers;
 pub mod layout;

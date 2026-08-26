@@ -49,6 +49,7 @@ pub async fn run(mut app: App) -> io::Result<()> {
     let mut domain_table = StatefulTable::new();
     let mut plan_table = StatefulTable::new();
     let mut quota_table = StatefulTable::new();
+    let mut config_table = StatefulTable::new();
     let mut session_list_state = ratatui::widgets::ListState::default();
     let mut role_list_state = ratatui::widgets::ListState::default();
     let mut permission_list_state = ratatui::widgets::ListState::default();
@@ -88,6 +89,7 @@ pub async fn run(mut app: App) -> io::Result<()> {
                 Tab::Plans => {
                     ui::plans::render(frame, &app, content_body, &mut plan_table, &mut quota_table)
                 }
+                Tab::Config => ui::config::render(frame, &app, content_body, &mut config_table),
                 Tab::AuditLog => ui::audit_log::render(frame, &app, content_body, &mut audit_table),
             }
 
@@ -362,6 +364,31 @@ pub async fn run(mut app: App) -> io::Result<()> {
                         ("Limit", limit, "-1 means unlimited"),
                     ],
                     *field,
+                ),
+                Modal::DefineConfig {
+                    config_key,
+                    display_name,
+                    category,
+                    value_type,
+                    default_value,
+                    field,
+                } => modal::render_form(
+                    frame,
+                    "Define Tenant Configuration",
+                    &[
+                        ("Key", config_key, "check_in_time"),
+                        ("Display name", display_name, "Check-in time"),
+                        ("Category", category, "operations"),
+                        ("Type", value_type, "string/integer/boolean/json/..."),
+                        ("Default JSON", default_value, "\"15:00\" or 15 or true"),
+                    ],
+                    *field,
+                ),
+                Modal::SetConfigValue { value } => modal::render_form(
+                    frame,
+                    "Set Tenant Configuration Value",
+                    &[("Value JSON", value, "\"text\", 42, true, or {...}")],
+                    0,
                 ),
                 Modal::EditPermission {
                     name,
@@ -1855,6 +1882,102 @@ async fn handle_key(app: &mut App, code: KeyCode, _mods: KeyModifiers) {
             }
             return;
         }
+        Modal::DefineConfig {
+            mut config_key,
+            mut display_name,
+            mut category,
+            mut value_type,
+            mut default_value,
+            mut field,
+        } => {
+            match code {
+                KeyCode::Esc => app.modal = Modal::None,
+                KeyCode::Tab => field = (field + 1) % 5,
+                KeyCode::Enter if !config_key.is_empty() && !display_name.is_empty() => {
+                    let parsed = if default_value.trim().is_empty() {
+                        Ok(None)
+                    } else {
+                        serde_json::from_str(&default_value).map(Some)
+                    };
+                    match parsed {
+                        Ok(value) => {
+                            app.modal = Modal::None;
+                            perform_define_config(
+                                app,
+                                config_key,
+                                display_name,
+                                category,
+                                value_type,
+                                value,
+                            )
+                            .await;
+                            return;
+                        }
+                        Err(error) => {
+                            app.modal = Modal::Error(format!("Invalid default JSON: {error}"));
+                            return;
+                        }
+                    }
+                }
+                KeyCode::Backspace => {
+                    let values = [
+                        &mut config_key,
+                        &mut display_name,
+                        &mut category,
+                        &mut value_type,
+                        &mut default_value,
+                    ];
+                    values[field].pop();
+                }
+                KeyCode::Char(character) => {
+                    let values = [
+                        &mut config_key,
+                        &mut display_name,
+                        &mut category,
+                        &mut value_type,
+                        &mut default_value,
+                    ];
+                    values[field].push(character);
+                }
+                _ => {}
+            }
+            if !matches!(app.modal, Modal::None) {
+                app.modal = Modal::DefineConfig {
+                    config_key,
+                    display_name,
+                    category,
+                    value_type,
+                    default_value,
+                    field,
+                };
+            }
+            return;
+        }
+        Modal::SetConfigValue { mut value } => {
+            match code {
+                KeyCode::Esc => app.modal = Modal::None,
+                KeyCode::Enter => match serde_json::from_str(&value) {
+                    Ok(parsed) => {
+                        app.modal = Modal::None;
+                        perform_set_config_value(app, parsed).await;
+                        return;
+                    }
+                    Err(error) => {
+                        app.modal = Modal::Error(format!("Invalid JSON: {error}"));
+                        return;
+                    }
+                },
+                KeyCode::Backspace => {
+                    value.pop();
+                }
+                KeyCode::Char(character) => value.push(character),
+                _ => {}
+            }
+            if !matches!(app.modal, Modal::None) {
+                app.modal = Modal::SetConfigValue { value };
+            }
+            return;
+        }
         Modal::EditPermission {
             id,
             mut name,
@@ -2047,7 +2170,8 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                 Tab::IdentityProviders => Tab::Settings,
                 Tab::Domains => Tab::IdentityProviders,
                 Tab::Plans => Tab::Domains,
-                Tab::AuditLog => Tab::Plans,
+                Tab::Config => Tab::Plans,
+                Tab::AuditLog => Tab::Config,
             };
             load_current_tab(app).await;
         }
@@ -2061,7 +2185,8 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                 Tab::Settings => Tab::IdentityProviders,
                 Tab::IdentityProviders => Tab::Domains,
                 Tab::Domains => Tab::Plans,
-                Tab::Plans => Tab::AuditLog,
+                Tab::Plans => Tab::Config,
+                Tab::Config => Tab::AuditLog,
                 Tab::AuditLog => Tab::Clients,
             };
             load_current_tab(app).await;
@@ -2120,6 +2245,11 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                     load_selected_plan_quotas(app).await;
                 }
             }
+            Tab::Config => {
+                if app.config_selected > 0 {
+                    app.config_selected -= 1;
+                }
+            }
             Tab::AuditLog => {
                 if app.audit_log_selected > 0 {
                     app.audit_log_selected -= 1;
@@ -2167,6 +2297,11 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                 if app.plan_selected + 1 < app.plans.len() {
                     app.plan_selected += 1;
                     load_selected_plan_quotas(app).await;
+                }
+            }
+            Tab::Config => {
+                if app.config_selected + 1 < app.config_definitions.len() {
+                    app.config_selected += 1;
                 }
             }
             Tab::AuditLog => {
@@ -2235,6 +2370,16 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                     price_cents: "0".into(),
                     currency: "USD".into(),
                     trial_days: "14".into(),
+                    field: 0,
+                };
+            }
+            Tab::Config => {
+                app.modal = Modal::DefineConfig {
+                    config_key: String::new(),
+                    display_name: String::new(),
+                    category: "general".into(),
+                    value_type: "string".into(),
+                    default_value: String::new(),
                     field: 0,
                 };
             }
@@ -2308,6 +2453,17 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
             Tab::AuditLog => {}
             Tab::Domains => {}
             Tab::Plans => {}
+            Tab::Config => {
+                if let Some(definition) = app.selected_config() {
+                    let value = app
+                        .config_values
+                        .get(&definition.id)
+                        .cloned()
+                        .or_else(|| definition.default_value.as_ref().map(ToString::to_string))
+                        .unwrap_or_else(|| "null".into());
+                    app.modal = Modal::SetConfigValue { value };
+                }
+            }
             Tab::IdentityProviders => {
                 if let Some(idp) = app.selected_idp() {
                     app.modal = Modal::EditIdp {
@@ -2424,6 +2580,7 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                 }
             }
             Tab::Plans => {}
+            Tab::Config => {}
             Tab::IdentityProviders => {
                 if let Some(idp) = app.selected_idp() {
                     app.modal = Modal::ConfirmDelete {
@@ -2449,7 +2606,18 @@ async fn load_all(app: &mut App) {
     load_access_contexts(app, &tid).await;
     let client = app.client.clone();
 
-    let (clients_r, users_r, roles_r, perms_r, sessions_r, idps_r, domains_r, plans_r, audit_r) = tokio::join!(
+    let (
+        clients_r,
+        users_r,
+        roles_r,
+        perms_r,
+        sessions_r,
+        idps_r,
+        domains_r,
+        plans_r,
+        config_r,
+        audit_r,
+    ) = tokio::join!(
         client.list_clients(&tid),
         client.list_users(&tid),
         client.list_roles(&tid),
@@ -2458,6 +2626,7 @@ async fn load_all(app: &mut App) {
         client.list_identity_providers(&tid),
         client.list_domains(&tid),
         client.list_plans(),
+        client.list_config_definitions(&tid),
         client.list_audit_log(&tid),
     );
 
@@ -2540,6 +2709,14 @@ async fn load_all(app: &mut App) {
         }
         Err(e) => on_load_err(app, e, "Plans"),
     }
+    match config_r {
+        Ok(list) => {
+            app.config_selected = app.config_selected.min(list.len().saturating_sub(1));
+            app.config_definitions = list;
+            load_config_values(app, &tid).await;
+        }
+        Err(e) => on_load_err(app, e, "Configuration"),
+    }
 }
 
 async fn load_current_tab(app: &mut App) {
@@ -2556,6 +2733,7 @@ async fn load_current_tab(app: &mut App) {
         Tab::IdentityProviders => load_idps(app, tid).await,
         Tab::Domains => load_domains(app, tid).await,
         Tab::Plans => load_plans(app).await,
+        Tab::Config => load_config(app, tid).await,
         Tab::AuditLog => load_audit_log(app, tid).await,
     }
 }
@@ -3174,6 +3352,41 @@ async fn load_selected_plan_quotas(app: &mut App) {
     }
 }
 
+async fn load_config(app: &mut App, tenant_id: String) {
+    app.config_loading = true;
+    match app.client.list_config_definitions(&tenant_id).await {
+        Ok(definitions) => {
+            app.config_selected = app.config_selected.min(definitions.len().saturating_sub(1));
+            app.config_definitions = definitions;
+            load_config_values(app, &tenant_id).await;
+            app.clear_status();
+        }
+        Err(error) => on_load_err(app, error, "Configuration"),
+    }
+    app.config_loading = false;
+}
+
+async fn load_config_values(app: &mut App, tenant_id: &str) {
+    app.config_values.clear();
+    let definitions = app.config_definitions.clone();
+    for definition in definitions {
+        match app
+            .client
+            .resolve_config_value(tenant_id, &definition.id)
+            .await
+        {
+            Ok(Some(value)) => {
+                app.config_values.insert(definition.id, value.to_string());
+            }
+            Ok(None) => {}
+            Err(error) => {
+                on_load_err(app, error, "Configuration value");
+                return;
+            }
+        }
+    }
+}
+
 async fn load_audit_log(app: &mut App, tenant_id: String) {
     app.audit_log = vec![];
     app.audit_log_selected = 0;
@@ -3638,6 +3851,60 @@ async fn perform_subscribe_plan(app: &mut App) {
     }
 }
 
+async fn perform_define_config(
+    app: &mut App,
+    config_key: String,
+    display_name: String,
+    category: String,
+    value_type: String,
+    default_value: Option<serde_json::Value>,
+) {
+    let Some(tenant_id) = app.active_tenant_id.clone() else {
+        return;
+    };
+    match app
+        .client
+        .define_config(
+            &tenant_id,
+            &config_key,
+            &display_name,
+            &category,
+            &value_type,
+            default_value,
+        )
+        .await
+    {
+        Ok(_) => {
+            app.set_status(format!("Configuration '{display_name}' defined"));
+            load_config(app, tenant_id).await;
+        }
+        Err(error) => app.modal = Modal::Error(error.to_string()),
+    }
+}
+
+async fn perform_set_config_value(app: &mut App, value: serde_json::Value) {
+    let Some(tenant_id) = app.active_tenant_id.clone() else {
+        return;
+    };
+    let Some(definition) = app.selected_config().cloned() else {
+        return;
+    };
+    match app
+        .client
+        .set_config_value(&tenant_id, &definition.id, value)
+        .await
+    {
+        Ok(_) => {
+            app.set_status(format!(
+                "Configuration '{}' updated",
+                definition.display_name
+            ));
+            load_config(app, tenant_id).await;
+        }
+        Err(error) => app.modal = Modal::Error(error.to_string()),
+    }
+}
+
 async fn perform_delete(app: &mut App, id: String) {
     app.modal = Modal::None;
     let Some(tid) = app.active_tenant_id.clone() else {
@@ -3677,6 +3944,7 @@ async fn perform_delete(app: &mut App, id: String) {
             .await
             .map(|_| "Domain deactivated"),
         Tab::Plans => return,
+        Tab::Config => return,
         Tab::IdentityProviders => app
             .client
             .delete_identity_provider(&tid, &id)
