@@ -6,6 +6,7 @@ mod swagger;
 pub use swagger::router as swagger_router;
 
 use crate::handlers::{
+    access_context::AccessContextResponse,
     admin_identity_providers::{CreateIdpRequest, IdpResponse, UpdateIdpRequest},
     admin_permissions::{
         AssignPermissionRequest, CreatePermissionRequest, PermissionResponse,
@@ -112,6 +113,7 @@ impl Modify for SecurityAddon {
         crate::handlers::webauthn::authenticate_finish,
         // user
         crate::handlers::me::me,
+        crate::handlers::access_context::list,
         crate::handlers::request_activity::list,
         crate::handlers::trusted_devices::trust_device,
         crate::handlers::trusted_devices::list_devices,
@@ -265,6 +267,7 @@ impl Modify for SecurityAddon {
             TrustedDeviceResponse,
             DefineConfigRequest, ConfigDefinitionResponse, SetConfigValueRequest, ConfigValueResponse,
             ActivityResponse,
+            AccessContextResponse,
         )
     ),
     modifiers(&SecurityAddon),

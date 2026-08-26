@@ -1758,6 +1758,9 @@ async fn handle_sidebar_key(app: &mut App, code: KeyCode) {
                 let tid = t.id.clone();
                 let switching_tenant = app.active_tenant_id.as_deref() != Some(&tid);
                 if switching_tenant {
+                    app.client.set_actor_context(None);
+                    app.access_contexts.clear();
+                    app.access_context_selected = 0;
                     app.clients = vec![];
                     app.users = vec![];
                     app.roles = vec![];
@@ -1793,6 +1796,19 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
     match code {
         KeyCode::Esc => {
             app.focus = Focus::Sidebar;
+        }
+        KeyCode::Char('c') if !app.access_contexts.is_empty() => {
+            app.access_context_selected =
+                (app.access_context_selected + 1) % app.access_contexts.len();
+            let selected = app.active_access_context().cloned();
+            app.client
+                .set_actor_context(selected.as_ref().map(|context| context.urdd_id.clone()));
+            if let Some(context) = selected {
+                app.set_status(format!(
+                    "Acting as {} / {} / {}",
+                    context.role_name, context.designation_name, context.department_name
+                ));
+            }
         }
         // ── Main tab navigation ──
         KeyCode::Left => {
@@ -2131,6 +2147,7 @@ async fn load_all(app: &mut App) {
     let Some(tid) = app.active_tenant_id.clone() else {
         return;
     };
+    load_access_contexts(app, &tid).await;
     let client = app.client.clone();
 
     let (clients_r, users_r, roles_r, perms_r, sessions_r, idps_r, audit_r) = tokio::join!(
@@ -2236,6 +2253,27 @@ async fn load_tenants(app: &mut App) {
         Err(e) => app.set_status(format!("Error: {e}")),
     }
     app.tenants_loading = false;
+}
+
+async fn load_access_contexts(app: &mut App, tenant_id: &str) {
+    app.client.set_actor_context(None);
+    match app.client.list_access_contexts(tenant_id).await {
+        Ok(contexts) => {
+            app.access_context_selected = app
+                .access_context_selected
+                .min(contexts.len().saturating_sub(1));
+            app.access_contexts = contexts;
+            let selected = app
+                .active_access_context()
+                .map(|context| context.urdd_id.clone());
+            app.client.set_actor_context(selected);
+        }
+        Err(error) => {
+            app.access_contexts.clear();
+            app.client.set_actor_context(None);
+            on_load_err(app, error, "Access contexts");
+        }
+    }
 }
 
 async fn load_clients(app: &mut App, tenant_id: String) {

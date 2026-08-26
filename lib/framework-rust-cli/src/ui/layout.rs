@@ -67,7 +67,17 @@ pub fn render_header(frame: &mut Frame, app: &App, area: Rect) {
     } else {
         Color::Yellow
     };
+    let context = app
+        .active_access_context()
+        .map(|value| {
+            format!(
+                " · {} / {} / {}",
+                value.role_name, value.designation_name, value.department_name
+            )
+        })
+        .unwrap_or_default();
     let status = Paragraph::new(Line::from(vec![
+        Span::styled(context, Style::default().fg(Color::DarkGray)),
         Span::styled("● ", Style::default().fg(dot_color)),
         Span::styled(connected, Style::default().fg(dot_color)),
     ]))

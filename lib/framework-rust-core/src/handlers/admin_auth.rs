@@ -9,12 +9,18 @@ pub async fn begin_tenant_txn(
     headers: &HeaderMap,
     tenant_id: Uuid,
 ) -> Result<DatabaseTransaction, AppError> {
-    let user_id = extract_actor(headers, &state.config);
+    let actor_identity = extract_actor_identity(headers, &state.config);
+    let user_id = actor_identity.map(|identity| identity.0);
+    let actor_tenant_id = actor_identity
+        .map(|identity| identity.1)
+        .unwrap_or(tenant_id);
     let requested = headers
         .get("x-framework-rust-urdd-id")
         .and_then(|value| value.to_str().ok())
         .and_then(|value| Uuid::parse_str(value).ok());
-    let (txn, actor) = db::begin_actor_tenant_txn(&state.db, tenant_id, user_id, requested).await?;
+    let (txn, actor) =
+        db::begin_cross_tenant_actor_txn(&state.db, tenant_id, actor_tenant_id, user_id, requested)
+            .await?;
     if user_id.is_some() && actor.is_none() {
         return Err(AppError::Unauthorized);
     }
@@ -25,6 +31,10 @@ pub async fn begin_tenant_txn(
 /// Returns `None` if no token is present or validation fails — callers record
 /// `None` as the actor when the request comes from a script using only the admin key.
 pub fn extract_actor(headers: &HeaderMap, config: &Config) -> Option<Uuid> {
+    extract_actor_identity(headers, config).map(|identity| identity.0)
+}
+
+fn extract_actor_identity(headers: &HeaderMap, config: &Config) -> Option<(Uuid, Uuid)> {
     let bearer = headers
         .get("authorization")
         .and_then(|v| v.to_str().ok())
@@ -35,7 +45,10 @@ pub fn extract_actor(headers: &HeaderMap, config: &Config) -> Option<Uuid> {
         config.jwt_secret_previous.as_deref(),
     )
     .ok()?;
-    Uuid::parse_str(&claims.sub).ok()
+    Some((
+        Uuid::parse_str(&claims.sub).ok()?,
+        Uuid::parse_str(&claims.tid).ok()?,
+    ))
 }
 
 /// Accept any of:

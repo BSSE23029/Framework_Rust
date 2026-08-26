@@ -186,4 +186,39 @@ async fn performer_urdd_controls_create_update_delete_and_restore() {
     assert!(restored.deleted_by.is_none());
     assert_eq!(restored.updated_by, Some(actor));
     txn.rollback().await.expect("rollback test data");
+
+    let target = tenants::ActiveModel {
+        name: Set(format!("Lifecycle Target {suffix}")),
+        slug: Set(format!("lifecycle-target-{suffix}")),
+        encryption_key: Set("target-lifecycle-key-at-least-32-chars".into()),
+        ..Default::default()
+    }
+    .insert(&database)
+    .await
+    .expect("target tenant");
+    let (cross_tenant, resolved) = db::begin_cross_tenant_actor_txn(
+        &database,
+        target.id,
+        tenant.id,
+        Some(user.id),
+        Some(actor),
+    )
+    .await
+    .expect("cross-tenant actor transaction");
+    assert_eq!(resolved, Some(actor));
+    let child_role = roles::ActiveModel {
+        tenant_id: Set(target.id),
+        name: Set(format!("Child Administered {suffix}")),
+        description: Set("created by master actor".into()),
+        created_by: Set(Some(spoofed)),
+        ..Default::default()
+    }
+    .insert(&cross_tenant)
+    .await
+    .expect("cross-tenant role");
+    assert_eq!(child_role.created_by, Some(actor));
+    cross_tenant
+        .rollback()
+        .await
+        .expect("cross-tenant rollback");
 }

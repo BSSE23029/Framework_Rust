@@ -61,11 +61,24 @@ pub async fn begin_actor_tenant_txn(
     user_id: Option<Uuid>,
     requested_urdd_id: Option<Uuid>,
 ) -> Result<(DatabaseTransaction, Option<Uuid>), DbErr> {
-    let txn = begin_tenant_txn(db, tenant_id).await?;
+    begin_cross_tenant_actor_txn(db, tenant_id, tenant_id, user_id, requested_urdd_id).await
+}
+
+/// Resolves the performer inside their authenticated tenant, then opens the
+/// target tenant transaction. This keeps master-admin actions attributable to
+/// their real URDD during legitimate cross-tenant administration.
+pub async fn begin_cross_tenant_actor_txn(
+    db: &DatabaseConnection,
+    target_tenant_id: Uuid,
+    actor_tenant_id: Uuid,
+    user_id: Option<Uuid>,
+    requested_urdd_id: Option<Uuid>,
+) -> Result<(DatabaseTransaction, Option<Uuid>), DbErr> {
+    let actor_txn = begin_tenant_txn(db, actor_tenant_id).await?;
     let actor = match user_id {
         Some(user_id) => {
             let mut query = user_role_designation_departments::Entity::find()
-                .filter(user_role_designation_departments::Column::TenantId.eq(tenant_id))
+                .filter(user_role_designation_departments::Column::TenantId.eq(actor_tenant_id))
                 .filter(user_role_designation_departments::Column::UserId.eq(user_id))
                 .filter(user_role_designation_departments::Column::Status.eq("active"))
                 .filter(user_role_designation_departments::Column::DeletedAt.is_null());
@@ -74,12 +87,14 @@ pub async fn begin_actor_tenant_txn(
             }
             query
                 .order_by_asc(user_role_designation_departments::Column::CreatedAt)
-                .one(&txn)
+                .one(&actor_txn)
                 .await?
                 .map(|row| row.id)
         }
         None => None,
     };
+    actor_txn.rollback().await?;
+    let txn = begin_tenant_txn(db, target_tenant_id).await?;
     if let Some(actor_id) = actor {
         set_actor_context(&txn, actor_id).await?;
     }

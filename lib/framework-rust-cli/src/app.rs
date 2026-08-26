@@ -1,6 +1,6 @@
 use crate::api::{
-    AuditLogEntry, Client, IdentityProvider, OAuthClient, PasskeyInfo, Permission, Role, Session,
-    Tenant, User,
+    AccessContext, AuditLogEntry, Client, IdentityProvider, OAuthClient, PasskeyInfo, Permission,
+    Role, Session, Tenant, User,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -301,6 +301,8 @@ pub struct App {
     pub audit_log_loading: bool,
 
     pub active_tenant_id: Option<String>,
+    pub access_contexts: Vec<AccessContext>,
+    pub access_context_selected: usize,
 
     pub settings: SettingsState,
 
@@ -360,6 +362,8 @@ impl App {
             audit_log_loading: false,
 
             active_tenant_id: None,
+            access_contexts: vec![],
+            access_context_selected: 0,
 
             settings: SettingsState::default(),
 
@@ -411,5 +415,9 @@ impl App {
         self.tenants
             .get(self.tenant_selected)
             .map(|t| t.name.as_str())
+    }
+
+    pub fn active_access_context(&self) -> Option<&AccessContext> {
+        self.access_contexts.get(self.access_context_selected)
     }
 }

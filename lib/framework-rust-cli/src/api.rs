@@ -27,6 +27,7 @@ pub struct Client {
     inner: reqwest::Client,
     pub base_url: String,
     token: Option<String>,
+    actor_urdd_id: Option<String>,
 }
 
 impl Client {
@@ -38,11 +39,16 @@ impl Client {
                 .unwrap(),
             base_url,
             token: None,
+            actor_urdd_id: None,
         }
     }
 
     pub fn set_token(&mut self, token: String) {
         self.token = Some(token);
+    }
+
+    pub fn set_actor_context(&mut self, urdd_id: Option<String>) {
+        self.actor_urdd_id = urdd_id;
     }
 
     fn auth_headers(&self) -> reqwest::header::HeaderMap {
@@ -59,7 +65,20 @@ impl Client {
     fn tenant_headers(&self, tenant_id: &str) -> reqwest::header::HeaderMap {
         let mut map = self.auth_headers();
         map.insert("x-framework-rust-tenant-id", tenant_id.parse().unwrap());
+        if let Some(urdd_id) = &self.actor_urdd_id {
+            map.insert("x-framework-rust-urdd-id", urdd_id.parse().unwrap());
+        }
         map
+    }
+
+    pub async fn list_access_contexts(&self, tenant_id: &str) -> ApiResult<Vec<AccessContext>> {
+        let resp = self
+            .inner
+            .get(format!("{}/users/me/access-contexts", self.base_url))
+            .headers(self.tenant_headers(tenant_id))
+            .send()
+            .await?;
+        self.check(resp).await
     }
 
     async fn check<T: for<'de> Deserialize<'de>>(&self, resp: reqwest::Response) -> ApiResult<T> {
@@ -1135,6 +1154,39 @@ pub struct Tenant {
     pub slug: String,
     pub plan: String,
     pub created_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AccessContext {
+    pub urdd_id: String,
+    pub rdd_id: String,
+    pub role_id: String,
+    pub role_name: String,
+    pub designation_id: String,
+    pub designation_name: String,
+    pub department_id: String,
+    pub department_name: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Client;
+
+    #[test]
+    fn tenant_requests_include_selected_performer_urdd() {
+        let mut client = Client::new("http://localhost:3000".into());
+        client.set_token("token".into());
+        client.set_actor_context(Some("69bdc119-57fb-4c8a-9927-655200bb6db5".into()));
+        let headers = client.tenant_headers("fdcaa640-e2b6-4d0e-a389-e2e62cb61e30");
+        assert_eq!(
+            headers["x-framework-rust-urdd-id"],
+            "69bdc119-57fb-4c8a-9927-655200bb6db5"
+        );
+        assert_eq!(
+            headers["x-framework-rust-tenant-id"],
+            "fdcaa640-e2b6-4d0e-a389-e2e62cb61e30"
+        );
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

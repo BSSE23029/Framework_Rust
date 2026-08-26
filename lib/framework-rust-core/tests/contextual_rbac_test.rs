@@ -5,7 +5,7 @@ use framework_rust_core::{
         departments, designations, permission_groups, role_designation_departments, tenants,
         user_role_designation_departments, user_role_designation_permissions,
     },
-    services::{permission_service, role_service, user_service},
+    services::{access_context_service, permission_service, role_service, user_service},
 };
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
@@ -117,6 +117,15 @@ async fn contextual_rbac_complete_cycle() {
         .expect("urdp query")
         .expect("urdp");
     assert_eq!(urdp.status, "active");
+    let contexts = access_context_service::list_for_user(&txn, tenant.id, user.id)
+        .await
+        .expect("access contexts");
+    assert_eq!(contexts.len(), 1);
+    assert_eq!(contexts[0].urdd_id, urdd.id);
+    assert_eq!(contexts[0].rdd_id, rdd.id);
+    assert_eq!(contexts[0].role_name, role.name);
+    assert_eq!(contexts[0].designation_name, designation.name);
+    assert_eq!(contexts[0].department_name, department.name);
     assert!(
         permission_service::list_names_for_user(&txn, user.id, tenant.id)
             .await
