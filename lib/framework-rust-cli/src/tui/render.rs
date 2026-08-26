@@ -24,6 +24,20 @@ pub(super) fn render_modal(frame: &mut Frame, app: &App) {
                 *field,
             );
         }
+        Modal::TenantHierarchy {
+            tenant_type,
+            parent_tenant_id,
+            field,
+            ..
+        } => modal::render_form(
+            frame,
+            "Tenant Hierarchy",
+            &[
+                ("Type", tenant_type, "organization, hotel, or branch"),
+                ("Parent tenant ID", parent_tenant_id, "blank for root"),
+            ],
+            *field,
+        ),
         Modal::CreateClient {
             name,
             redirect_uri,

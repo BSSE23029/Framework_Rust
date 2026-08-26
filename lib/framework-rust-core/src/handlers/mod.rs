@@ -29,6 +29,7 @@ pub mod request_activity;
 pub mod reset_password;
 pub mod revoke;
 pub mod tenant_config;
+pub mod tenant_hierarchy;
 pub mod tenants;
 pub mod trusted_devices;
 pub mod verify_email;

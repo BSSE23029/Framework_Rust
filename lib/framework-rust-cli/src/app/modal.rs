@@ -10,6 +10,12 @@ pub enum Modal {
         slug: String,
         field: usize,
     },
+    TenantHierarchy {
+        tenant_id: String,
+        tenant_type: String,
+        parent_tenant_id: String,
+        field: usize,
+    },
     CreateClient {
         name: String,
         redirect_uri: String,

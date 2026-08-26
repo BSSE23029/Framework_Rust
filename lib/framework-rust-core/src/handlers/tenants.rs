@@ -31,6 +31,8 @@ pub struct TenantResponse {
     pub name: String,
     pub slug: String,
     pub plan: String,
+    pub tenant_type: String,
+    pub parent_tenant_id: Option<String>,
     pub created_at: String,
 }
 
@@ -123,6 +125,8 @@ pub async fn create_tenant(
             name: tenant.name,
             slug: tenant.slug,
             plan: tenant.plan,
+            tenant_type: tenant.tenant_type,
+            parent_tenant_id: tenant.parent_tenant_id.map(|id| id.to_string()),
             created_at: tenant.created_at.to_rfc3339(),
         }),
     ))
@@ -192,6 +196,8 @@ pub async fn list_tenants(
             name: t.name,
             slug: t.slug,
             plan: t.plan,
+            tenant_type: t.tenant_type,
+            parent_tenant_id: t.parent_tenant_id.map(|id| id.to_string()),
             created_at: t.created_at.to_rfc3339(),
         })
         .collect();

@@ -15,7 +15,24 @@ pub struct Tenant {
     pub name: String,
     pub slug: String,
     pub plan: String,
+    #[serde(default = "default_tenant_type")]
+    pub tenant_type: String,
+    pub parent_tenant_id: Option<String>,
     pub created_at: String,
+}
+
+fn default_tenant_type() -> String {
+    "hotel".into()
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TenantHierarchy {
+    pub id: String,
+    pub name: String,
+    pub slug: String,
+    pub tenant_type: String,
+    pub parent_tenant_id: Option<String>,
+    pub status: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]

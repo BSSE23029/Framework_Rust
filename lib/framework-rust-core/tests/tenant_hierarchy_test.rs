@@ -3,11 +3,16 @@ use framework_rust_core::{
     db,
     entity::{tenant_domains, tenants},
     error::AppError,
+    router::build_router,
+    services::jwk_service::JwkService,
     services::tenant_hierarchy_service,
+    state::AppState,
 };
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{ActiveModelTrait, EntityTrait, Set};
+use std::{net::SocketAddr, sync::Arc};
 use uuid::Uuid;
+use webauthn_rs::prelude::{Url, WebauthnBuilder};
 
 async fn create_tenant(database: &sea_orm::DatabaseConnection, label: &str) -> tenants::Model {
     let suffix = Uuid::new_v4();
@@ -150,4 +155,107 @@ async fn tenant_hierarchy_and_domains_complete_cycle() {
         Err(AppError::Conflict)
     ));
     txn.rollback().await.expect("outsider rollback");
+
+    let rp_origin = Url::parse(&config.framework_rust_issuer).expect("issuer");
+    let webauthn = Arc::new(
+        WebauthnBuilder::new(rp_origin.host_str().unwrap_or("localhost"), &rp_origin)
+            .expect("webauthn builder")
+            .rp_name("Hierarchy test")
+            .build()
+            .expect("webauthn"),
+    );
+    let app = build_router(AppState::new(
+        database.clone(),
+        config.clone(),
+        JwkService::generate(),
+        None,
+        webauthn,
+    ));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("listener");
+    let address = listener.local_addr().expect("address");
+    tokio::spawn(async move {
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .expect("serve hierarchy API");
+    });
+
+    let api_organization = create_tenant(&database, "ApiOrganization").await;
+    let api_hotel = create_tenant(&database, "ApiHotel").await;
+    let admin_key = config.admin_key.as_deref().expect("development admin key");
+    let client = reqwest::Client::new();
+    for (tenant, tenant_type, parent) in [
+        (&api_organization, "organization", None),
+        (&api_hotel, "hotel", Some(api_organization.id)),
+    ] {
+        let response = client
+            .put(format!(
+                "http://{address}/admin/tenants/{}/hierarchy",
+                tenant.id
+            ))
+            .header("x-framework-rust-admin-key", admin_key)
+            .json(&serde_json::json!({
+                "tenant_type": tenant_type,
+                "parent_tenant_id": parent,
+            }))
+            .send()
+            .await
+            .expect("set hierarchy request");
+        assert_eq!(response.status(), reqwest::StatusCode::NO_CONTENT);
+    }
+    let children = client
+        .get(format!(
+            "http://{address}/admin/tenants/{}/children",
+            api_organization.id
+        ))
+        .header("x-framework-rust-admin-key", admin_key)
+        .send()
+        .await
+        .expect("list children request")
+        .error_for_status()
+        .expect("children response")
+        .json::<Vec<serde_json::Value>>()
+        .await
+        .expect("children JSON");
+    assert_eq!(children.len(), 1);
+    assert_eq!(children[0]["id"], api_hotel.id.to_string());
+
+    let department = client
+        .post(format!(
+            "http://{address}/admin/tenants/{}/access/departments",
+            api_hotel.id
+        ))
+        .header("x-framework-rust-admin-key", admin_key)
+        .json(&serde_json::json!({
+            "name": "API Operations",
+            "code": format!("API-{}", Uuid::new_v4()),
+            "description": "route-level access test",
+        }))
+        .send()
+        .await
+        .expect("create department request")
+        .error_for_status()
+        .expect("department response")
+        .json::<serde_json::Value>()
+        .await
+        .expect("department JSON");
+    let departments = client
+        .get(format!(
+            "http://{address}/admin/tenants/{}/access/departments",
+            api_hotel.id
+        ))
+        .header("x-framework-rust-admin-key", admin_key)
+        .send()
+        .await
+        .expect("list departments request")
+        .error_for_status()
+        .expect("departments response")
+        .json::<Vec<serde_json::Value>>()
+        .await
+        .expect("departments JSON");
+    assert!(departments.iter().any(|row| row["id"] == department["id"]));
 }

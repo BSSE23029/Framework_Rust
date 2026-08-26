@@ -1,6 +1,41 @@
 use super::*;
 
 impl Client {
+    pub async fn set_tenant_hierarchy(
+        &self,
+        tenant_id: &str,
+        tenant_type: &str,
+        parent_tenant_id: Option<&str>,
+    ) -> ApiResult<()> {
+        let response = self
+            .inner
+            .put(format!(
+                "{}/admin/tenants/{tenant_id}/hierarchy",
+                self.base_url
+            ))
+            .headers(self.tenant_headers(tenant_id))
+            .json(&serde_json::json!({
+                "tenant_type": tenant_type,
+                "parent_tenant_id": parent_tenant_id,
+            }))
+            .send()
+            .await?;
+        self.check_empty(response).await
+    }
+
+    pub async fn list_tenant_children(&self, tenant_id: &str) -> ApiResult<Vec<TenantHierarchy>> {
+        let response = self
+            .inner
+            .get(format!(
+                "{}/admin/tenants/{tenant_id}/children",
+                self.base_url
+            ))
+            .headers(self.tenant_headers(tenant_id))
+            .send()
+            .await?;
+        self.check(response).await
+    }
+
     pub async fn list_tenant_slugs(&self) -> ApiResult<Vec<(String, String)>> {
         #[derive(Deserialize)]
         struct Entry {

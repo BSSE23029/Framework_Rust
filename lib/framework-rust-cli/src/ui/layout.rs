@@ -98,7 +98,14 @@ pub fn render_tenant_sidebar(frame: &mut Frame, app: &App, area: Rect) {
     } else {
         app.tenants
             .iter()
-            .map(|t| ListItem::new(format!(" {}", t.name)))
+            .map(|t| {
+                let indent = match t.tenant_type.as_str() {
+                    "branch" => "    ",
+                    "hotel" if t.parent_tenant_id.is_some() => "  ",
+                    _ => "",
+                };
+                ListItem::new(format!(" {indent}{} ({})", t.name, t.tenant_type))
+            })
             .collect()
     };
 

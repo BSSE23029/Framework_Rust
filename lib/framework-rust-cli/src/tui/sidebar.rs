@@ -42,6 +42,16 @@ pub(super) async fn handle_sidebar_key(app: &mut App, code: KeyCode) {
                 field: 0,
             };
         }
+        KeyCode::Char('h') => {
+            if let Some(tenant) = app.selected_tenant() {
+                app.modal = Modal::TenantHierarchy {
+                    tenant_id: tenant.id.clone(),
+                    tenant_type: tenant.tenant_type.clone(),
+                    parent_tenant_id: tenant.parent_tenant_id.clone().unwrap_or_default(),
+                    field: 0,
+                };
+            }
+        }
         KeyCode::Char('r') => load_tenants(app).await,
         _ => {}
     }

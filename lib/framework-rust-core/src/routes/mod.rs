@@ -13,5 +13,6 @@ pub mod auth;
 pub mod clients;
 pub mod oauth_as;
 pub mod settings;
+pub mod tenant_hierarchy;
 pub mod tenants;
 pub mod user;

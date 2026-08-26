@@ -51,6 +51,7 @@ pub fn build_router(state: AppState) -> Router {
     let oauth_callbacks = routes::auth::callback_router();
 
     let admin = routes::tenants::router()
+        .merge(routes::tenant_hierarchy::router())
         .merge(routes::admin_access::router())
         .merge(routes::clients::router())
         .merge(routes::admin_users::router())

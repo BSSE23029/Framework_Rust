@@ -13,13 +13,14 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         (_, _, Modal::EditUser { .. }) => "Tab Next  Enter Save  Esc Cancel",
         (_, _, Modal::EditSettings(_)) => "Tab Next  Enter Save  Esc Cancel",
         (_, _, Modal::CreateTenant { .. }) => "Tab Next  Enter Create  Esc Cancel",
+        (_, _, Modal::TenantHierarchy { .. }) => "Tab Next  Enter Save hierarchy  Esc Cancel",
         (_, _, Modal::ConfirmDelete { .. }) => "y Confirm  Any Cancel",
         (_, _, Modal::QuickStart(_)) => "Tab Next  Enter Continue  Esc Cancel",
         (_, _, Modal::PostCreateTenant { .. }) => "Enter Setup wizard  Esc Skip",
         (_, _, Modal::ShowSecret { .. }) | (_, _, Modal::Error(_)) => "Any Close",
         (_, _, Modal::ClientRoles { .. }) => "↑↓ Navigate  Space Toggle  Enter Save  Esc Cancel",
         (_, _, Modal::None) => match &app.focus {
-            Focus::Sidebar => "↑↓ Navigate  Enter Open  n New  r Refresh  q Quit",
+            Focus::Sidebar => "↑↓ Navigate  Enter Open  n New  h Hierarchy  r Refresh  q Quit",
             Focus::Content => match &app.tab {
                 Tab::Settings => "↑↓ Navigate  Enter Edit  c Context  r Refresh  Esc Back",
                 Tab::Access => {
