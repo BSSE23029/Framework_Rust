@@ -31,6 +31,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                     "↑↓ Navigate  n New  u Set quota  s Subscribe/trial  c Context  r Refresh"
                 }
                 Tab::Config => "↑↓ Navigate  n Define  e Set value  c Context  r Refresh",
+                Tab::Security => "↑↓ Devices  n Trust this device  d Revoke  c Context  r Refresh",
                 Tab::Users => {
                     "↑↓ Navigate  n New  e Edit  d Deactivate  c Context  r Refresh  Esc Back"
                 }

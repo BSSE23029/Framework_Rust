@@ -50,6 +50,8 @@ pub async fn run(mut app: App) -> io::Result<()> {
     let mut plan_table = StatefulTable::new();
     let mut quota_table = StatefulTable::new();
     let mut config_table = StatefulTable::new();
+    let mut trusted_device_table = StatefulTable::new();
+    let mut activity_table = StatefulTable::new();
     let mut session_list_state = ratatui::widgets::ListState::default();
     let mut role_list_state = ratatui::widgets::ListState::default();
     let mut permission_list_state = ratatui::widgets::ListState::default();
@@ -90,6 +92,13 @@ pub async fn run(mut app: App) -> io::Result<()> {
                     ui::plans::render(frame, &app, content_body, &mut plan_table, &mut quota_table)
                 }
                 Tab::Config => ui::config::render(frame, &app, content_body, &mut config_table),
+                Tab::Security => ui::security::render(
+                    frame,
+                    &app,
+                    content_body,
+                    &mut trusted_device_table,
+                    &mut activity_table,
+                ),
                 Tab::AuditLog => ui::audit_log::render(frame, &app, content_body, &mut audit_table),
             }
 
@@ -389,6 +398,19 @@ pub async fn run(mut app: App) -> io::Result<()> {
                     "Set Tenant Configuration Value",
                     &[("Value JSON", value, "\"text\", 42, true, or {...}")],
                     0,
+                ),
+                Modal::TrustDevice {
+                    name,
+                    ttl_days,
+                    field,
+                } => modal::render_form(
+                    frame,
+                    "Trust This Device",
+                    &[
+                        ("Name", name, "Raza's laptop"),
+                        ("TTL days", ttl_days, "30"),
+                    ],
+                    *field,
                 ),
                 Modal::EditPermission {
                     name,
@@ -1978,6 +2000,44 @@ async fn handle_key(app: &mut App, code: KeyCode, _mods: KeyModifiers) {
             }
             return;
         }
+        Modal::TrustDevice {
+            mut name,
+            mut ttl_days,
+            mut field,
+        } => {
+            match code {
+                KeyCode::Esc => app.modal = Modal::None,
+                KeyCode::Tab => field = (field + 1) % 2,
+                KeyCode::Enter if !name.is_empty() && ttl_days.parse::<i64>().is_ok() => {
+                    app.modal = Modal::None;
+                    perform_trust_device(app, name, ttl_days.parse().unwrap_or(30)).await;
+                    return;
+                }
+                KeyCode::Backspace => {
+                    if field == 0 {
+                        name.pop();
+                    } else {
+                        ttl_days.pop();
+                    }
+                }
+                KeyCode::Char(character) => {
+                    if field == 0 {
+                        name.push(character);
+                    } else {
+                        ttl_days.push(character);
+                    }
+                }
+                _ => {}
+            }
+            if !matches!(app.modal, Modal::None) {
+                app.modal = Modal::TrustDevice {
+                    name,
+                    ttl_days,
+                    field,
+                };
+            }
+            return;
+        }
         Modal::EditPermission {
             id,
             mut name,
@@ -2171,7 +2231,8 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                 Tab::Domains => Tab::IdentityProviders,
                 Tab::Plans => Tab::Domains,
                 Tab::Config => Tab::Plans,
-                Tab::AuditLog => Tab::Config,
+                Tab::Security => Tab::Config,
+                Tab::AuditLog => Tab::Security,
             };
             load_current_tab(app).await;
         }
@@ -2186,7 +2247,8 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                 Tab::IdentityProviders => Tab::Domains,
                 Tab::Domains => Tab::Plans,
                 Tab::Plans => Tab::Config,
-                Tab::Config => Tab::AuditLog,
+                Tab::Config => Tab::Security,
+                Tab::Security => Tab::AuditLog,
                 Tab::AuditLog => Tab::Clients,
             };
             load_current_tab(app).await;
@@ -2250,6 +2312,11 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                     app.config_selected -= 1;
                 }
             }
+            Tab::Security => {
+                if app.trusted_device_selected > 0 {
+                    app.trusted_device_selected -= 1;
+                }
+            }
             Tab::AuditLog => {
                 if app.audit_log_selected > 0 {
                     app.audit_log_selected -= 1;
@@ -2302,6 +2369,11 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
             Tab::Config => {
                 if app.config_selected + 1 < app.config_definitions.len() {
                     app.config_selected += 1;
+                }
+            }
+            Tab::Security => {
+                if app.trusted_device_selected + 1 < app.trusted_devices.len() {
+                    app.trusted_device_selected += 1;
                 }
             }
             Tab::AuditLog => {
@@ -2380,6 +2452,13 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                     category: "general".into(),
                     value_type: "string".into(),
                     default_value: String::new(),
+                    field: 0,
+                };
+            }
+            Tab::Security => {
+                app.modal = Modal::TrustDevice {
+                    name: String::new(),
+                    ttl_days: "30".into(),
                     field: 0,
                 };
             }
@@ -2464,6 +2543,7 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
                     app.modal = Modal::SetConfigValue { value };
                 }
             }
+            Tab::Security => {}
             Tab::IdentityProviders => {
                 if let Some(idp) = app.selected_idp() {
                     app.modal = Modal::EditIdp {
@@ -2581,6 +2661,14 @@ async fn handle_content_key(app: &mut App, code: KeyCode) {
             }
             Tab::Plans => {}
             Tab::Config => {}
+            Tab::Security => {
+                if let Some(device) = app.selected_trusted_device() {
+                    app.modal = Modal::ConfirmDelete {
+                        id: device.id.clone(),
+                        label: device.name.clone(),
+                    };
+                }
+            }
             Tab::IdentityProviders => {
                 if let Some(idp) = app.selected_idp() {
                     app.modal = Modal::ConfirmDelete {
@@ -2616,6 +2704,8 @@ async fn load_all(app: &mut App) {
         domains_r,
         plans_r,
         config_r,
+        devices_r,
+        activity_r,
         audit_r,
     ) = tokio::join!(
         client.list_clients(&tid),
@@ -2627,6 +2717,8 @@ async fn load_all(app: &mut App) {
         client.list_domains(&tid),
         client.list_plans(),
         client.list_config_definitions(&tid),
+        client.list_trusted_devices(&tid),
+        client.list_request_activity(&tid),
         client.list_audit_log(&tid),
     );
 
@@ -2717,6 +2809,19 @@ async fn load_all(app: &mut App) {
         }
         Err(e) => on_load_err(app, e, "Configuration"),
     }
+    match devices_r {
+        Ok(list) => {
+            app.trusted_device_selected = app
+                .trusted_device_selected
+                .min(list.len().saturating_sub(1));
+            app.trusted_devices = list;
+        }
+        Err(e) => on_load_err(app, e, "Trusted devices"),
+    }
+    match activity_r {
+        Ok(list) => app.request_activity = list,
+        Err(e) => on_load_err(app, e, "Request activity"),
+    }
 }
 
 async fn load_current_tab(app: &mut App) {
@@ -2734,6 +2839,7 @@ async fn load_current_tab(app: &mut App) {
         Tab::Domains => load_domains(app, tid).await,
         Tab::Plans => load_plans(app).await,
         Tab::Config => load_config(app, tid).await,
+        Tab::Security => load_security(app, tid).await,
         Tab::AuditLog => load_audit_log(app, tid).await,
     }
 }
@@ -3387,6 +3493,26 @@ async fn load_config_values(app: &mut App, tenant_id: &str) {
     }
 }
 
+async fn load_security(app: &mut App, tenant_id: String) {
+    let (devices, activity) = tokio::join!(
+        app.client.list_trusted_devices(&tenant_id),
+        app.client.list_request_activity(&tenant_id),
+    );
+    match devices {
+        Ok(list) => {
+            app.trusted_device_selected = app
+                .trusted_device_selected
+                .min(list.len().saturating_sub(1));
+            app.trusted_devices = list;
+        }
+        Err(error) => on_load_err(app, error, "Trusted devices"),
+    }
+    match activity {
+        Ok(list) => app.request_activity = list,
+        Err(error) => on_load_err(app, error, "Request activity"),
+    }
+}
+
 async fn load_audit_log(app: &mut App, tenant_id: String) {
     app.audit_log = vec![];
     app.audit_log_selected = 0;
@@ -3905,6 +4031,22 @@ async fn perform_set_config_value(app: &mut App, value: serde_json::Value) {
     }
 }
 
+async fn perform_trust_device(app: &mut App, name: String, ttl_days: i64) {
+    let Some(tenant_id) = app.active_tenant_id.clone() else {
+        return;
+    };
+    match app.client.trust_device(&tenant_id, &name, ttl_days).await {
+        Ok(issued) => {
+            load_security(app, tenant_id).await;
+            app.modal = Modal::ShowSecret {
+                client_id: format!("Trusted device token — {}", issued.device.name),
+                secret: issued.token,
+            };
+        }
+        Err(error) => app.modal = Modal::Error(error.to_string()),
+    }
+}
+
 async fn perform_delete(app: &mut App, id: String) {
     app.modal = Modal::None;
     let Some(tid) = app.active_tenant_id.clone() else {
@@ -3945,6 +4087,11 @@ async fn perform_delete(app: &mut App, id: String) {
             .map(|_| "Domain deactivated"),
         Tab::Plans => return,
         Tab::Config => return,
+        Tab::Security => app
+            .client
+            .revoke_trusted_device(&tid, &id)
+            .await
+            .map(|_| "Trusted device revoked"),
         Tab::IdentityProviders => app
             .client
             .delete_identity_provider(&tid, &id)

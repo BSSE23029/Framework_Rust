@@ -9,6 +9,7 @@ pub mod permissions;
 pub mod plans;
 pub mod quickstart;
 pub mod roles;
+pub mod security;
 pub mod sessions;
 pub mod settings;
 pub mod users;

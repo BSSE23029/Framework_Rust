@@ -493,6 +493,67 @@ impl Client {
         self.check(resp).await
     }
 
+    pub async fn list_trusted_devices(&self, tenant_id: &str) -> ApiResult<Vec<TrustedDevice>> {
+        let resp = self
+            .inner
+            .get(format!("{}/users/me/trusted-devices", self.base_url))
+            .headers(self.tenant_headers(tenant_id))
+            .send()
+            .await?;
+        self.check(resp).await
+    }
+
+    pub async fn trust_device(
+        &self,
+        tenant_id: &str,
+        name: &str,
+        ttl_days: i64,
+    ) -> ApiResult<TrustedDeviceIssued> {
+        let resp = self
+            .inner
+            .post(format!("{}/users/me/trusted-devices", self.base_url))
+            .headers(self.tenant_headers(tenant_id))
+            .json(&serde_json::json!({
+                "name": name,
+                "fingerprint": null,
+                "ttl_days": ttl_days,
+            }))
+            .send()
+            .await?;
+        self.check(resp).await
+    }
+
+    pub async fn revoke_trusted_device(&self, tenant_id: &str, device_id: &str) -> ApiResult<()> {
+        let resp = self
+            .inner
+            .delete(format!(
+                "{}/users/me/trusted-devices/{device_id}",
+                self.base_url
+            ))
+            .headers(self.tenant_headers(tenant_id))
+            .send()
+            .await?;
+        let status = resp.status();
+        if status.is_success() {
+            Ok(())
+        } else {
+            Err(ApiError::Api {
+                status: status.as_u16(),
+                message: "trusted device revocation failed".into(),
+            })
+        }
+    }
+
+    pub async fn list_request_activity(&self, tenant_id: &str) -> ApiResult<Vec<RequestActivity>> {
+        let resp = self
+            .inner
+            .get(format!("{}/users/me/activity?limit=100", self.base_url))
+            .headers(self.tenant_headers(tenant_id))
+            .send()
+            .await?;
+        self.check(resp).await
+    }
+
     pub async fn create_tenant(&self, name: &str, slug: &str) -> ApiResult<Tenant> {
         let resp = self
             .inner
@@ -1464,6 +1525,40 @@ pub struct ConfigValue {
     pub scope_type: String,
     pub scope_id: Option<String>,
     pub value: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TrustedDevice {
+    pub id: String,
+    pub name: String,
+    pub user_agent: Option<String>,
+    pub ip_address: Option<String>,
+    pub trusted_at: String,
+    pub last_used_at: Option<String>,
+    pub expires_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TrustedDeviceIssued {
+    #[serde(flatten)]
+    pub device: TrustedDevice,
+    pub token: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RequestActivity {
+    pub id: String,
+    pub request_id: String,
+    pub actor_urdd_id: String,
+    pub http_method: String,
+    pub request_path: String,
+    pub response_status: i32,
+    pub response_time_ms: i64,
+    pub ip_address: Option<String>,
+    pub user_agent: Option<String>,
+    pub platform: Option<String>,
+    pub platform_version: Option<String>,
+    pub created_at: String,
 }
 
 #[cfg(test)]

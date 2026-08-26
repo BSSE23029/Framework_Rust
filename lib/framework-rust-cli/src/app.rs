@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use crate::api::{
     AccessContext, AuditLogEntry, Client, ConfigDefinition, IdentityProvider, OAuthClient,
-    PasskeyInfo, Permission, PlanQuota, Role, Session, Tenant, TenantDomain, TenantPlan, User,
+    PasskeyInfo, Permission, PlanQuota, RequestActivity, Role, Session, Tenant, TenantDomain,
+    TenantPlan, TrustedDevice, User,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -38,6 +39,7 @@ pub enum Tab {
     Domains,
     Plans,
     Config,
+    Security,
     AuditLog,
 }
 
@@ -277,6 +279,11 @@ pub enum Modal {
     SetConfigValue {
         value: String,
     },
+    TrustDevice {
+        name: String,
+        ttl_days: String,
+        field: usize,
+    },
     EditPermission {
         id: String,
         name: String,
@@ -349,6 +356,10 @@ pub struct App {
     pub config_selected: usize,
     pub config_loading: bool,
     pub config_values: HashMap<String, String>,
+
+    pub trusted_devices: Vec<TrustedDevice>,
+    pub trusted_device_selected: usize,
+    pub request_activity: Vec<RequestActivity>,
 
     pub active_tenant_id: Option<String>,
     pub access_contexts: Vec<AccessContext>,
@@ -425,6 +436,10 @@ impl App {
             config_loading: false,
             config_values: HashMap::new(),
 
+            trusted_devices: vec![],
+            trusted_device_selected: 0,
+            request_activity: vec![],
+
             active_tenant_id: None,
             access_contexts: vec![],
             access_context_selected: 0,
@@ -477,6 +492,10 @@ impl App {
 
     pub fn selected_config(&self) -> Option<&ConfigDefinition> {
         self.config_definitions.get(self.config_selected)
+    }
+
+    pub fn selected_trusted_device(&self) -> Option<&TrustedDevice> {
+        self.trusted_devices.get(self.trusted_device_selected)
     }
 
     pub fn set_status(&mut self, msg: impl Into<String>) {

@@ -143,7 +143,8 @@ pub fn render_tabs(frame: &mut Frame, app: &App, area: Rect) {
         Tab::Domains => 7,
         Tab::Plans => 8,
         Tab::Config => 9,
-        Tab::AuditLog => 10,
+        Tab::Security => 10,
+        Tab::AuditLog => 11,
     };
     let base_style = if focused {
         Style::default().fg(Color::White)
@@ -168,6 +169,7 @@ pub fn render_tabs(frame: &mut Frame, app: &App, area: Rect) {
         "Domains",
         "Plans",
         "Config",
+        "Security",
         "Audit",
     ]
     .iter()
