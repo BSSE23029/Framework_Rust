@@ -7,6 +7,9 @@ pub mod entity;
 pub mod error;
 #[path = "runtime/extractors.rs"]
 pub mod extractors;
+#[cfg(test)]
+#[path = "quality/folder_layout.rs"]
+mod folder_layout;
 pub mod handlers;
 pub mod middleware;
 #[path = "platform/openapi.rs"]

@@ -3,10 +3,13 @@ title: SMTP & Email Delivery
 description: Configure per-tenant SMTP so FRAMEWORK RUST can send verification and password-reset emails.
 ---
 
-FRAMEWORK RUST supports per-tenant SMTP configuration. When enabled, the server sends transactional emails for two flows:
+FRAMEWORK RUST sends mail directly through each tenant's configured SMTP server using the Rust `lettre` library. It has no required email-vendor integration or bundled delivery service: use any standards-compatible provider such as Amazon SES, Postmark, SendGrid, Mailgun, Resend SMTP, or a self-hosted SMTP server.
+
+When enabled, the server sends transactional emails for three flows:
 
 - **Email verification** — triggered on registration when the tenant's `require_email_verified` setting is `true`
 - **Password reset** — triggered when a user calls `POST /auth/forgot-password`
+- **Passwordless login** — sends a one-time code from `POST /auth/passwordless/request`
 
 Email delivery is best-effort: if the SMTP connection fails, the error is logged and the originating API call still succeeds. Users are not shown delivery errors.
 
@@ -98,20 +101,28 @@ X-FRAMEWORK-RUST-Tenant-ID: <tenant-uuid>
       }'
     ```
 
-    Returns `200 OK` with the updated config (same shape as GET, password omitted).
+    Returns `200 OK` with `{ "message": "SMTP config saved" }`.
 
-    **Disable without wiping config:**
+    **Disable without wiping config:** resend the non-secret configuration fields with `enabled: false` and omit `password`:
 
     ```bash
     curl -X PUT http://localhost:3000/admin/smtp \
       -H "X-FRAMEWORK-RUST-Admin-Key: your-admin-key" \
       -H "X-FRAMEWORK-RUST-Tenant-ID: 018e1234-0000-7000-8000-000000000001" \
       -H "Content-Type: application/json" \
-      -d '{ "enabled": false }'
+      -d '{
+        "host": "smtp.sendgrid.net",
+        "port": 587,
+        "username": "apikey",
+        "from_name": "Acme Auth",
+        "from_email": "no-reply@acme.com",
+        "use_tls": true,
+        "enabled": false
+      }'
     ```
 
     <Note>
-      All fields are optional on PUT. Only the fields you include are updated.
+      `host`, `username`, `from_name`, and `from_email` are required on every PUT. `password` may be omitted to retain the existing encrypted password; `port`, `use_tls`, and `enabled` use their documented defaults when omitted.
     </Note>
   </Tab>
 </Tabs>
@@ -156,6 +167,10 @@ If you did not request this, you can safely ignore it.
 
 The token maps to `one_time_tokens` with `purpose = reset_password`. Submit it to `POST /auth/reset-password` along with the new password.
 
+### Passwordless login
+
+`POST /auth/passwordless/request` creates and emails a short-lived one-time code when passwordless login is enabled for the tenant. The code is then submitted to `POST /auth/passwordless/verify`. As with password reset, the request response does not disclose whether an account exists.
+
 <Warning>
   If SMTP is disabled or not configured, forgot-password still returns `200 OK` but no email is sent. Ensure SMTP is enabled and tested before enabling the `require_email_verified` tenant setting in production.
 </Warning>
@@ -171,6 +186,13 @@ SMTP passwords are encrypted at rest using FRAMEWORK RUST's double-envelope AES-
 3. The SMTP password ciphertext (+ nonce) is stored in `tenant_smtp_config`; the plaintext never touches the database
 
 The password is decrypted in-process only at send time and is never returned by any API endpoint.
+
+## Delivery characteristics
+
+- Messages contain both plain-text and HTML alternatives.
+- `use_tls: true` negotiates STARTTLS; disabling it uses the SMTP relay without STARTTLS.
+- Sending is synchronous but best-effort from the authentication flow: configuration, connection, and delivery failures are logged and are not returned to the caller.
+- There is currently no durable queue, automatic retry schedule, bounce processing, delivery-status tracking, or provider webhook handling.
 
 <Check>Use a dedicated SMTP credential (API key) rather than your primary mail account password.</Check>
 <Check>Ensure your SMTP provider enforces TLS — keep `use_tls: true` unless your provider explicitly requires otherwise.</Check>
