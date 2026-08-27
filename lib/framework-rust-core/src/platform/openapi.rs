@@ -2,6 +2,7 @@ use utoipa::{
     openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme},
     Modify, OpenApi,
 };
+#[path = "openapi/swagger.rs"]
 mod swagger;
 pub use swagger::router as swagger_router;
 

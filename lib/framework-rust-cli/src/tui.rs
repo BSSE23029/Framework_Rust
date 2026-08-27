@@ -15,26 +15,46 @@ use crate::{
     ui,
 };
 
+#[path = "tui/views/access.rs"]
 mod access;
+#[path = "tui/views/all_data.rs"]
 mod all_data;
+#[path = "tui/input/auth.rs"]
 mod auth;
+#[path = "tui/actions/client_actions.rs"]
 mod client_actions;
+#[path = "tui/input/content.rs"]
 mod content;
+#[path = "tui/actions/feature_loaders.rs"]
 mod feature_loaders;
+#[path = "tui/input/key_dispatch.rs"]
 mod key_dispatch;
+#[path = "tui/actions/loaders.rs"]
 mod loaders;
+#[path = "tui/modals/modal_accounts.rs"]
 mod modal_accounts;
+#[path = "tui/modals/modal_basic.rs"]
 mod modal_basic;
+#[path = "tui/modals/modal_idp.rs"]
 mod modal_idp;
+#[path = "tui/modals/modal_platform.rs"]
 mod modal_platform;
+#[path = "tui/modals/modal_rbac.rs"]
 mod modal_rbac;
 mod modal_special;
+#[path = "tui/input/navigation.rs"]
 mod navigation;
+#[path = "tui/views/quickstart.rs"]
 mod quickstart;
+#[path = "tui/actions/rbac_actions.rs"]
 mod rbac_actions;
+#[path = "tui/views/render.rs"]
 mod render;
+#[path = "tui/views/settings.rs"]
 mod settings;
+#[path = "tui/input/sidebar.rs"]
 mod sidebar;
+#[path = "tui/actions/tenant_actions.rs"]
 mod tenant_actions;
 
 use all_data::*;

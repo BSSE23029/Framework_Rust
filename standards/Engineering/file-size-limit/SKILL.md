@@ -16,6 +16,7 @@ Run:
 standards/Engineering/file-size-limit/check.sh
 standards/Engineering/file-size-limit/check.sh lib/path/to/file.rs
 standards/Engineering/file-size-limit/check.sh --hard
+standards/Engineering/file-size-limit/check-folders.sh
 ```
 
 The checker scans Rust source in the repository and excludes build output under `target/`.
@@ -44,3 +45,7 @@ standards/Engineering/file-size-limit/check.sh --hard
 
 Run the focused tests for the moved behavior. Review the diff to ensure the split did not change
 logic.
+
+Keep at most five immediate files in every maintained project folder. When a folder would exceed
+five files, introduce a cohesive feature subfolder and preserve public Rust paths with `#[path]`,
+`mod`, and `pub use` as appropriate. Verify with `check-folders.sh` from the repository root.

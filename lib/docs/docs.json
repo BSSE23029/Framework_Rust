@@ -35,26 +35,26 @@
       {
         "group": "Features",
         "pages": [
-          "mfa",
-          "webauthn",
-          "smtp",
-          "social-login",
-          "m2m"
+          "features/mfa",
+          "features/webauthn",
+          "features/smtp",
+          "features/social-login",
+          "features/m2m"
         ]
       },
       {
         "group": "Guides",
         "pages": [
-          "architecture",
-          "security",
-          "admin-tui",
-          "database"
+          "guides/architecture",
+          "guides/security",
+          "guides/admin-tui",
+          "guides/database"
         ]
       },
       {
         "group": "API Reference",
         "pages": [
-          "api-reference"
+          "reference/api-reference"
         ]
       }
     ]

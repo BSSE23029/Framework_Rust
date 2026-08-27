@@ -12,11 +12,11 @@ use sea_orm::{sea_query::OnConflict, ConnectionTrait, EntityTrait, Set};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-#[path = "auth_test/lifecycle_security.rs"]
+#[path = "lifecycle_security.rs"]
 mod lifecycle_security;
-#[path = "auth_test/policy_and_rbac.rs"]
+#[path = "policy_and_rbac.rs"]
 mod policy_and_rbac;
-#[path = "auth_test/token_flows.rs"]
+#[path = "token_flows.rs"]
 mod token_flows;
 
 async fn setup() -> (sea_orm::DatabaseConnection, Config, Uuid, String) {

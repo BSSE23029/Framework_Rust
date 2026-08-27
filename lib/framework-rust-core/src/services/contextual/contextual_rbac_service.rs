@@ -13,6 +13,7 @@ use crate::{
     error::AppError,
 };
 
+#[path = "contextual_rbac_service/permissions.rs"]
 mod permissions;
 pub(crate) use permissions::ensure_urdp;
 pub use permissions::{grant_role_permission, revoke_role_permission};

@@ -147,12 +147,18 @@ impl Client {
     }
 }
 
+#[path = "admin/access.rs"]
 mod access;
+#[path = "auth/auth.rs"]
 mod auth;
+#[path = "auth/identity.rs"]
 mod identity;
 mod models;
+#[path = "admin/rbac.rs"]
 mod rbac;
+#[path = "auth/settings.rs"]
 mod settings;
+#[path = "admin/tenancy.rs"]
 mod tenancy;
 
 pub use models::*;

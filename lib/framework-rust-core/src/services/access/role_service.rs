@@ -11,6 +11,7 @@ use crate::{
     services::contextual_rbac_service,
 };
 
+#[path = "role_service/client.rs"]
 mod client;
 pub use client::{
     assign_client_role, list_client_role_names_for_user, list_for_client, revoke_client_role,

@@ -179,7 +179,7 @@ If the master or wrap key is lost, all encrypted data is permanently inaccessibl
 
 **Planned for v0.5 (Stage 7):** client-side envelope encryption for tenant configuration secrets. The admin's browser will encrypt SMTP passwords and IdP secrets with a key derived from their password before transmission. The server will hold only ciphertext at rest and will not be able to decrypt without an active admin session.
 
-See [Architecture](architecture.md) for the full encryption model.
+See [Architecture](/guides/architecture) for the full encryption model.
 
 ---
 

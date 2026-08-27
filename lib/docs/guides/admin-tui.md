@@ -3,7 +3,7 @@ title: Admin TUI
 description: Complete reference for the framework-rust terminal UI — layout, navigation, every tab, every modal.
 ---
 
-The `framework-rust` binary is a full-featured terminal admin interface built with Ratatui. Every action maps to an admin API call — use the [API Reference](/api-reference) for scripted automation.
+The `framework-rust` binary is a full-featured terminal admin interface built with Ratatui. Every action maps to an admin API call — use the [API Reference](/reference/api-reference) for scripted automation.
 
 ## Install
 

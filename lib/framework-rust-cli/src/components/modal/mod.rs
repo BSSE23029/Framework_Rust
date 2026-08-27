@@ -101,9 +101,11 @@ pub fn render_secret(frame: &mut Frame, client_id: &str, secret: &str) {
     frame.render_widget(para, area);
 }
 
+#[path = "special/access.rs"]
 mod access;
 mod forms;
 mod role;
+#[path = "special/settings.rs"]
 mod settings;
 mod user;
 

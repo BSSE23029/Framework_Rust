@@ -15,6 +15,7 @@ use crate::{
     state::AppState,
 };
 
+#[path = "admin_roles/client_roles.rs"]
 mod client_roles;
 pub use client_roles::*;
 

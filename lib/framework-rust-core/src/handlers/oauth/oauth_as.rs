@@ -23,6 +23,7 @@ use crate::{
     state::AppState,
 };
 
+#[path = "oauth_as/introspection.rs"]
 mod introspection;
 pub use introspection::*;
 
